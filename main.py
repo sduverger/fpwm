@@ -52,14 +52,80 @@ atom_names = ["_NET_SUPPORTED",
               # "_NET_WM_STATE_BELOW",
               # "_NET_WM_STATE_MODAL",
               # "_NET_WM_STATE_HIDDEN",
-              #"_NET_WM_STATE_DEMANDS_ATTENTION"
+              # "_NET_WM_STATE_DEMANDS_ATTENTION"
               ]
 
 con = xcb.connect()
 con.core.GrabServer()
 
 setup = con.get_setup()
-screen= setup.roots[0]
+
+class LayoutTall:
+    def __init__(self, screen):
+        self.screen = screen
+        self.master = None
+        self.slaves = []
+
+    def map(self, nc, clist):
+        if not nc.tilled:
+            # become master
+            nc.tilled = True
+            nc.geo_real.b = 1
+            nc.geo_real.w = (self.screen.width - 2*nc.geo_real.b)/2
+            nc.geo_real.x = 0
+            nc.geo_real.y = 0
+
+            nc.geo_real.h = self.screen.height - 2*nc.geo_real.b
+            nc.real_configure_notify()
+
+            if self.master is None:
+                self.master = nc.id
+                return
+
+            if len(self.slaves) == 0 :
+                self.slaves.append(clist[self.master])
+                self.master = nc.id
+            else:
+                self.slaves.append(nc)
+
+            l = len(self.slaves)
+            h = (self.screen.height/l) - (l*2*nc.geo_real.b)
+            for i in range(l):
+                c = self.slaves[i]
+                c.geo_real.x = self.screen.width/2 + 2*nc.geo_real.b
+                c.geo_real.y = i*(h + 2*nc.geo_real.b)
+                c.geo_real.h = h
+                c.real_configure_notify()
+
+class Screen:
+    def __init__(self, screen):
+        self.root = screen.root
+        self.width = screen.width_in_pixels
+        self.height = screen.height_in_pixels
+        self.visual = screen.root_visual
+        self.depth = screen.root_depth
+        self.__clients = {}
+        self.layout = LayoutTall(self)
+
+    def add_client(self, client):
+        self.__clients[client.id] = client
+
+    def del_client(self, client):
+        self.__clients[client.id] = None
+
+    def get_client(self, id):
+        return self.__client.get(id, None)
+
+    def map(self, client):
+        c = self.__clients[client.id]
+        self.layout.map(c, self.__clients)
+
+screens = []
+for s in setup.roots:
+    screens.append(Screen(s))
+
+def current_screen():
+    return screens[0]
 
 atoms = {}
 for n in atom_names:
@@ -68,20 +134,19 @@ for n in atom_names:
 for n in atoms:
     atoms[n] = atoms[n].reply().atom
 
-
-con.core.ChangeProperty(PropMode.Replace, screen.root, atoms["_NET_SUPPORTED"], Atom.ATOM, 32, len(atoms), atoms.itervalues())
+con.core.ChangeProperty(PropMode.Replace, screens[0].root, atoms["_NET_SUPPORTED"], Atom.ATOM, 32, len(atoms), atoms.itervalues())
 
 virtual_root = con.generate_id()
-con.core.CreateWindow(screen.root_depth, virtual_root,
-                      screen.root, -1, -1, 1, 1, 0, WindowClass.CopyFromParent, screen.root_visual, 0, [])
+con.core.CreateWindow(screens[0].depth, virtual_root,
+                      screens[0].root, -1, -1, 1, 1, 0, WindowClass.CopyFromParent, screens[0].visual, 0, [])
 
-print "Root window: %d | Virtual root: %d" % (screen.root, virtual_root)
+print "Root window: %d | Virtual root: %d" % (screens[0].root, virtual_root)
 
 def Flat(format, list):
     f={32:'I',16:'H',8:'B'}[format]
     return array(f, list).tostring()
 
-con.core.ChangeProperty(PropMode.Replace, screen.root, atoms["_NET_SUPPORTING_WM_CHECK"], Atom.WINDOW, 32, 1, Flat(32,[virtual_root]))
+con.core.ChangeProperty(PropMode.Replace, screens[0].root, atoms["_NET_SUPPORTING_WM_CHECK"], Atom.WINDOW, 32, 1, Flat(32,[virtual_root]))
 con.core.ChangeProperty(PropMode.Replace, virtual_root, atoms["_NET_SUPPORTING_WM_CHECK"],Atom.WINDOW, 32, 1, Flat(32,[virtual_root]))
 
 con.core.ChangeProperty(PropMode.Replace, virtual_root, atoms["_NET_WM_NAME"], Atom.STRING, 8, len(wmname), wmname)
@@ -91,7 +156,7 @@ while con.poll_for_event():
     pass
 
 try:
-    con.core.ChangeWindowAttributesChecked(screen.root, CW.EventMask, events).check()
+    con.core.ChangeWindowAttributesChecked(screens[0].root, CW.EventMask, events).check()
 except BadAccess, e:
     print "A window manager is already running !"
     con.disconnect()
@@ -102,35 +167,77 @@ con.flush()
 
 clients = {}
 
+class Geometry:
+    def __init__(self, x,y, w,h, b):
+        self.x = x
+        self.y = y
+        self.w = w
+        self.h = h
+        self.b = b
+
 class Client:
     def __init__(self, event):
         self.id = event.window
         self.parent = event.parent
+        self.geo_real = Geometry(event.x, event.y, event.width, event.height, event.border_width)
+        self.geo_want = Geometry(event.x, event.y, event.width, event.height, event.border_width)
+        self.screen = current_screen()
+        self.tilled = False
+        self.screen.add_client(self)
 
-        self.x_rel = event.x
-        self.y_rel = event.y
+    def destroy(self):
+        self.screen.del_client(self)
 
-        self.width = event.width
-        self.height = event.height
-        self.border = event.border_width
+    def real_configure_notify(self):
+        mask = ConfigWindow.X|ConfigWindow.Y|ConfigWindow.Width|ConfigWindow.Height|ConfigWindow.BorderWidth
+        values = [self.geo_real.x, self.geo_real.y, self.geo_real.w, self.geo_real.h, self.geo_real.b]
+        con.core.ConfigureWindow(self.id, mask, values)
 
-# def client_resize():
-#     mask = x|y|width|height
-#     configure_window_request()
+    def synthetic_configure_notify(self):
+        e = ConfigureNotifyEvent(self.parent)
+        e.x = self.geo_want.x
+        e.y = self.geo_want.y
+        e.width = self.geo_want.w
+        e.height = self.geo_want.h
+        e.border_width = self.geo_want.b
+        e.override_redirect = 0
+        e.above_sibling = 0
+        e.window = self.id
+        con.core.SendEvent(False, self.id, EventMask.StructureNotify, e)
 
-def client_configure_window(client, event):
-    print "configuring client %d" % client.id
-    #get x,y,w,h
-    #get border
-    #del sibling stack
-    #if not client_resize():
-    #    send_configure_notify(STRUCTURE_NOTIFY)
+    def moveresize(self):
+        if self.geo_want.x != self.geo_real.x:
+            self.geo_real.x = self.geo_want.x
 
-# ConfigureRequestEvent
-# {'parent': 289, 'width': 10, 'stack_mode': 0, 'height': 17, 'sibling': 0, 'window': 4194317, 'y': 0, 'x': 0, 'border_width': 1, 'value_mask': 12}
+        if self.geo_want.y != self.geo_real.y:
+            self.geo_real.y = self.geo_want.y
 
-# ConfigureRequestEvent
-# {'parent': 289, 'width': 484, 'stack_mode': 0, 'height': 316, 'sibling': 0, 'window': 4194317, 'y': 0, 'x': 0, 'border_width': 1, 'value_mask': 12}
+        if self.geo_want.w != self.geo_real.w:
+            self.geo_real.w = self.geo_want.w
+
+        if self.geo_want.h != self.geo_real.h:
+            self.geo_real.h = self.geo_want.h
+
+        self.real_configure_notify()
+
+    def configure(self, event):
+        print "configuring client %d" % self.id
+
+        if event.value_mask & ConfigWindow.X:
+            self.geo_want.x = event.x
+        if event.value_mask & ConfigWindow.Y:
+            self.geo_want.y = event.y
+        if event.value_mask & ConfigWindow.Width:
+            self.geo_want.w = event.width
+        if event.value_mask & ConfigWindow.Height:
+            self.geo_want.h = event.height
+        if event.value_mask & ConfigWindow.BorderWidth:
+            self.geo_want.b = event.border_width
+
+        if event.value_mask & (ConfigWindow.X|ConfigWindow.Y|ConfigWindow.Width|ConfigWindow.Height):
+            return self.moveresize()
+
+        return self.synthetic_configure_notify()
 
 def vanilla_configure_window_request(event):
     values = []
@@ -153,20 +260,30 @@ def vanilla_configure_window_request(event):
 
 def event_configure_window_request(event):
     client = clients.get(event.window, None)
-    if client:
-        client_configure_window(client, event)
-    else:
+    if client is None:
         vanilla_configure_window_request(event)
+    else:
+        client.configure(event)
 
 def event_create_notify(event):
     if event.override_redirect == 0:
         print "new client %d" % event.window
         clients[event.window] = Client(event)
 
+def event_destroy_notify(event):
+    clients[event.window].destroy()
+    clients[event.window] = None
+
 def event_map_window(event):
+    client = clients.get(event.window, None)
+    if client is not None:
+        client.screen.map(client)
+
     con.core.MapWindow(event.window)
 
+
 event_handlers = { CreateNotifyEvent:event_create_notify,
+                   DestroyNotifyEvent:event_destroy_notify,
                    ConfigureRequestEvent:event_configure_window_request,
                    MapRequestEvent:event_map_window
                    }
