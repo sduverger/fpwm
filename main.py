@@ -88,13 +88,13 @@ class LayoutTall:
             else:
                 self.slaves.append(nc)
 
-            l = len(self.slaves)
-            h = (self.screen.height/l) - (l*2*nc.geo_real.b)
-            for i in range(l):
+            L = len(self.slaves)
+            H = self.screen.height/L
+            for i in range(L):
                 c = self.slaves[i]
-                c.geo_real.x = self.screen.width/2 + 2*nc.geo_real.b
-                c.geo_real.y = i*(h + 2*nc.geo_real.b)
-                c.geo_real.h = h
+                c.geo_real.x = self.screen.width/2
+                c.geo_real.y = i*H
+                c.geo_real.h = H - (2*nc.geo_real.b)
                 c.real_configure_notify()
 
 class Screen:
