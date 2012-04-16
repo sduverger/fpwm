@@ -330,7 +330,9 @@ def event_destroy_notify(event):
     scr = current_screen()
     client = scr.get_client(event.window)
     if client is not None:
-        scr.unmap(client)
+        print "destroy client %d" % event.window
+        if(client.managed):
+            scr.unmap(client)
         scr.del_client(client)
 
 def event_map_window(event):
