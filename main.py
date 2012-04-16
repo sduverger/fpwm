@@ -60,6 +60,9 @@ con.core.GrabServer()
 
 setup = con.get_setup()
 
+#
+# Layouts
+#
 class LayoutTall:
     def __init__(self, screen):
         self.screen = screen
@@ -67,26 +70,25 @@ class LayoutTall:
         self.slaves = {}
         self.slaves_ordered = []
 
-    def map(self, nc, clist):
+    def map(self, nc):
         nc.geo_real.b = 1
         nc.geo_real.x = 0
         nc.geo_real.y = 0
         nc.geo_real.h = self.screen.height - 2*nc.geo_real.b
 
-        if self.master is None:
-            self.master = nc.id
-        else:
-            self.slaves[self.master] = clist[self.master]
-            self.slaves_ordered.insert(0,self.master)
-            self.master = nc.id
+        if self.master is not None:
+            self.slaves[self.master.id] = self.master
+            self.slaves_ordered.insert(0,self.master.id)
+
+        self.master = nc
 
         if len(self.slaves_ordered) == 0:
-            nc.geo_real.w = (self.screen.width - 2*nc.geo_real.b)
+            self.master.geo_real.w = (self.screen.width - 2*nc.geo_real.b)
         else:
-            nc.geo_real.w = (self.screen.width - 2*nc.geo_real.b)/2
+            self.master.geo_real.w = (self.screen.width - 2*nc.geo_real.b)/2
             self.remap_slaves()
 
-        nc.real_configure_notify()
+        self.master.real_configure_notify()
 
     def remap_slaves(self):
         L = len(self.slaves_ordered)
@@ -99,15 +101,14 @@ class LayoutTall:
             c.geo_real.h = H - (2*c.geo_real.b)
             c.real_configure_notify()
 
-    def unmap(self, nc, clist):
-        if nc.id == self.master:
+    def unmap(self, nc):
+        if nc.id == self.master.id:
             self.master = None
             if len(self.slaves_ordered) != 0:
                 nm = self.slaves[self.slaves_ordered[0]]
                 self.slaves[nm.id] = None
                 self.slaves_ordered = self.slaves_ordered[1:]
-                nm.tilled = False
-                self.map(nm, clist)
+                self.map(nm)
         else:
             self.slaves_ordered.remove(nc.id)
             self.slaves[nc.id] = None
@@ -115,11 +116,13 @@ class LayoutTall:
             if len(self.slaves_ordered) != 0:
                 self.remap_slaves()
             else:
-                nm = clist[self.master]
+                nm = self.master
                 self.master = None
-                nm.tilled = False
-                self.map(nm, clist)
+                self.map(nm)
 
+#
+# Screens
+#
 class Screen:
     def __init__(self, screen):
         self.root = screen.root
@@ -137,15 +140,13 @@ class Screen:
         self.__clients[client.id] = None
 
     def get_client(self, id):
-        return self.__client.get(id, None)
+        return self.__clients.get(id, None)
 
     def map(self, client):
-        c = self.__clients[client.id]
-        self.layout.map(c, self.__clients)
+        self.layout.map(client)
 
     def unmap(self, client):
-        c = self.__clients[client.id]
-        self.layout.unmap(c, self.__clients)
+        self.layout.unmap(client)
 
 screens = []
 for s in setup.roots:
@@ -192,8 +193,9 @@ except BadAccess, e:
 con.core.UngrabServer()
 con.flush()
 
-clients = {}
-
+#
+# Clients
+#
 class Geometry:
     def __init__(self, x,y, w,h, b):
         self.x = x
@@ -208,12 +210,9 @@ class Client:
         self.parent = event.parent
         self.geo_real = Geometry(event.x, event.y, event.width, event.height, event.border_width)
         self.geo_want = Geometry(event.x, event.y, event.width, event.height, event.border_width)
-        self.screen = current_screen()
-        self.tilled = False
-        self.screen.add_client(self)
 
     def destroy(self):
-        self.screen.del_client(self)
+        pass
 
     def real_configure_notify(self):
         mask = ConfigWindow.X|ConfigWindow.Y|ConfigWindow.Width|ConfigWindow.Height|ConfigWindow.BorderWidth
@@ -285,8 +284,12 @@ def vanilla_configure_window_request(event):
 
     con.core.ConfigureWindow(event.window, event.value_mask, values)
 
+#
+# Events
+#
 def event_configure_window_request(event):
-    client = clients.get(event.window, None)
+    scr = current_screen()
+    client = scr.get_client(event.window)
     if client is None:
         vanilla_configure_window_request(event)
     else:
@@ -295,19 +298,20 @@ def event_configure_window_request(event):
 def event_create_notify(event):
     if event.override_redirect == 0:
         print "new client %d" % event.window
-        clients[event.window] = Client(event)
+        current_screen().add_client(Client(event))
 
 def event_destroy_notify(event):
-    client = clients.get(event.window, None)
+    scr = current_screen()
+    client = scr.get_client(event.window)
     if client is not None:
-        client.screen.unmap(client)
-        clients[event.window].destroy()
-        clients[event.window] = None
+        scr.unmap(client)
+        scr.del_client(client)
 
 def event_map_window(event):
-    client = clients.get(event.window, None)
+    scr = current_screen()
+    client = scr.get_client(event.window)
     if client is not None:
-        client.screen.map(client)
+        scr.map(client)
 
     con.core.MapWindow(event.window)
 
@@ -326,7 +330,9 @@ def event_handler(event):
         print "--> ",event.__class__.__name__
         hdl(event)
 
-# event loop
+#
+# Main
+#
 while True:
     try:
         event = con.wait_for_event()
