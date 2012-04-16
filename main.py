@@ -64,38 +64,61 @@ class LayoutTall:
     def __init__(self, screen):
         self.screen = screen
         self.master = None
-        self.slaves = []
+        self.slaves = {}
+        self.slaves_ordered = []
 
     def map(self, nc, clist):
-        if not nc.tilled:
-            # become master
-            nc.tilled = True
-            nc.geo_real.b = 1
+        nc.geo_real.b = 1
+        nc.geo_real.x = 0
+        nc.geo_real.y = 0
+        nc.geo_real.h = self.screen.height - 2*nc.geo_real.b
+
+        if self.master is None:
+            self.master = nc.id
+        else:
+            self.slaves[self.master] = clist[self.master]
+            self.slaves_ordered.insert(0,self.master)
+            self.master = nc.id
+
+        if len(self.slaves_ordered) == 0:
+            nc.geo_real.w = (self.screen.width - 2*nc.geo_real.b)
+        else:
             nc.geo_real.w = (self.screen.width - 2*nc.geo_real.b)/2
-            nc.geo_real.x = 0
-            nc.geo_real.y = 0
+            self.remap_slaves()
 
-            nc.geo_real.h = self.screen.height - 2*nc.geo_real.b
-            nc.real_configure_notify()
+        nc.real_configure_notify()
 
-            if self.master is None:
-                self.master = nc.id
-                return
+    def remap_slaves(self):
+        L = len(self.slaves_ordered)
+        H = self.screen.height/L
+        for i in range(L):
+            c = self.slaves[self.slaves_ordered[i]]
+            c.geo_real.x = self.screen.width/2
+            c.geo_real.y = i*H
+            c.geo_real.w = (self.screen.width - 2*c.geo_real.b)/2
+            c.geo_real.h = H - (2*c.geo_real.b)
+            c.real_configure_notify()
 
-            if len(self.slaves) == 0 :
-                self.slaves.append(clist[self.master])
-                self.master = nc.id
+    def unmap(self, nc, clist):
+        if nc.id == self.master:
+            self.master = None
+            if len(self.slaves_ordered) != 0:
+                nm = self.slaves[self.slaves_ordered[0]]
+                self.slaves[nm.id] = None
+                self.slaves_ordered = self.slaves_ordered[1:]
+                nm.tilled = False
+                self.map(nm, clist)
+        else:
+            self.slaves_ordered.remove(nc.id)
+            self.slaves[nc.id] = None
+
+            if len(self.slaves_ordered) != 0:
+                self.remap_slaves()
             else:
-                self.slaves.append(nc)
-
-            L = len(self.slaves)
-            H = self.screen.height/L
-            for i in range(L):
-                c = self.slaves[i]
-                c.geo_real.x = self.screen.width/2
-                c.geo_real.y = i*H
-                c.geo_real.h = H - (2*nc.geo_real.b)
-                c.real_configure_notify()
+                nm = clist[self.master]
+                self.master = None
+                nm.tilled = False
+                self.map(nm, clist)
 
 class Screen:
     def __init__(self, screen):
@@ -119,6 +142,10 @@ class Screen:
     def map(self, client):
         c = self.__clients[client.id]
         self.layout.map(c, self.__clients)
+
+    def unmap(self, client):
+        c = self.__clients[client.id]
+        self.layout.unmap(c, self.__clients)
 
 screens = []
 for s in setup.roots:
@@ -271,8 +298,11 @@ def event_create_notify(event):
         clients[event.window] = Client(event)
 
 def event_destroy_notify(event):
-    clients[event.window].destroy()
-    clients[event.window] = None
+    client = clients.get(event.window, None)
+    if client is not None:
+        client.screen.unmap(client)
+        clients[event.window].destroy()
+        clients[event.window] = None
 
 def event_map_window(event):
     client = clients.get(event.window, None)
