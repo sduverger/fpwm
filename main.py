@@ -88,6 +88,7 @@ class LayoutTall:
             self.master.geo_real.w = (self.screen.width - 2*nc.geo_real.b)/2
             self.remap_slaves()
 
+        self.master.manage()
         self.master.real_configure_notify()
 
     def remap_slaves(self):
@@ -210,6 +211,15 @@ class Client:
         self.parent = event.parent
         self.geo_real = Geometry(event.x, event.y, event.width, event.height, event.border_width)
         self.geo_want = Geometry(event.x, event.y, event.width, event.height, event.border_width)
+        self.managed = False
+
+    def manage(self):
+        if self.managed:
+            return
+
+        values = [EventMask.EnterWindow|EventMask.PropertyChange|EventMask.FocusChange]
+        con.core.ChangeWindowAttributesChecked(self.id, CW.EventMask, values)
+        self.managed = True
 
     def destroy(self):
         pass
