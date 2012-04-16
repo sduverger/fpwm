@@ -230,16 +230,32 @@ class Client:
         con.core.ConfigureWindow(self.id, mask, values)
 
     def synthetic_configure_notify(self):
-        e = ConfigureNotifyEvent(self.parent)
-        e.x = self.geo_want.x
-        e.y = self.geo_want.y
-        e.width = self.geo_want.w
-        e.height = self.geo_want.h
-        e.border_width = self.geo_want.b
-        e.override_redirect = 0
-        e.above_sibling = 0
-        e.window = self.id
-        con.core.SendEvent(False, self.id, EventMask.StructureNotify, e)
+        """ cf. xcb/xproto.h
+865 #define XCB_CONFIGURE_NOTIFY 22
+866 
+867 /**
+868  * @brief xcb_configure_notify_event_t
+869  **/
+870 typedef struct xcb_configure_notify_event_t {
+871     uint8_t      response_type; /**<  */
+872     uint8_t      pad0; /**<  */
+873     uint16_t     sequence; /**<  */
+874     xcb_window_t event; /**<  */
+875     xcb_window_t window; /**<  */
+876     xcb_window_t above_sibling; /**<  */
+877     int16_t      x; /**<  */
+878     int16_t      y; /**<  */
+879     uint16_t     width; /**<  */
+880     uint16_t     height; /**<  */
+881     uint16_t     border_width; /**<  */
+882     uint8_t      override_redirect; /**<  */
+883     uint8_t      pad1; /**<  */
+884 } xcb_configure_notify_event_t;
+"""
+        event = pack("=B3xIIIHHHHHBx",
+                     22, self.id, self.id, 0,
+                     self.geo_want.x, self.geo_want.y, self.geo_want.w, self.geo_want.h, self.geo_want.b,0)
+        con.core.SendEvent(False, self.id, EventMask.StructureNotify, event)
 
     def moveresize(self):
         if self.geo_want.x != self.geo_real.x:
