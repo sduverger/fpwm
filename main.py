@@ -242,7 +242,7 @@ class Client:
     def __update(self):
         values = [self.border_color, EventMask.EnterWindow|EventMask.PropertyChange|EventMask.FocusChange]
         con.core.ChangeWindowAttributesChecked(self.id, CW.BorderPixel|CW.EventMask, values)
-        con.core.MapWindow(self.id)
+        #con.core.MapWindow(self.id)
 
     def manage(self):
         if self.managed:
@@ -349,8 +349,8 @@ def event_map_window(event):
     client = scr.get_client(event.window)
     if client is not None:
         scr.map(client)
-    else:
-        con.core.MapWindow(event.window)
+
+    con.core.MapWindow(event.window)
 
 def event_enter_notify(event):
     scr = current_screen()
