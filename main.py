@@ -83,9 +83,9 @@ class LayoutTall:
         self.master = nc
 
         if len(self.slaves_ordered) == 0:
-            self.master.geo_real.w = (self.screen.width - 2*nc.geo_real.b)
+            self.master.geo_real.w = self.screen.width - 2*nc.geo_real.b
         else:
-            self.master.geo_real.w = (self.screen.width - 2*nc.geo_real.b)/2
+            self.master.geo_real.w = self.screen.width/2 - 2*nc.geo_real.b
             self.remap_slaves()
 
         self.master.manage()
@@ -98,7 +98,7 @@ class LayoutTall:
             c = self.slaves[self.slaves_ordered[i]]
             c.geo_real.x = self.screen.width/2
             c.geo_real.y = i*H
-            c.geo_real.w = (self.screen.width - 2*c.geo_real.b)/2
+            c.geo_real.w = self.screen.width/2 - 2*c.geo_real.b
             c.geo_real.h = H - (2*c.geo_real.b)
             c.real_configure_notify()
 
@@ -133,12 +133,15 @@ class Screen:
         self.depth = screen.root_depth
         self.__clients = {}
         self.layout = LayoutTall(self)
+        self.focused_client = None
 
     def add_client(self, client):
         self.__clients[client.id] = client
 
     def del_client(self, client):
         self.__clients[client.id] = None
+        if len(self.__clients) == 0:
+            self.focused_client = None
 
     def get_client(self, id):
         return self.__clients.get(id, None)
@@ -148,6 +151,13 @@ class Screen:
 
     def unmap(self, client):
         self.layout.unmap(client)
+
+    def update_focus(self, client):
+        if self.focused_client is not None:
+            self.focused_client.unfocus()
+        self.focused_client = client
+        self.focused_client.focus()
+
 
 screens = []
 for s in setup.roots:
@@ -205,21 +215,41 @@ class Geometry:
         self.h = h
         self.b = b
 
+focused_border_pixel = 0x94bff3
+unfocused_border_pixel = 0x505050
+
 class Client:
     def __init__(self, event):
         self.id = event.window
         self.parent = event.parent
         self.geo_real = Geometry(event.x, event.y, event.width, event.height, event.border_width)
         self.geo_want = Geometry(event.x, event.y, event.width, event.height, event.border_width)
+        self.border_color = unfocused_border_pixel
         self.managed = False
+
+    def focus(self):
+        self.border_color = focused_border_pixel
+        self.update()
+
+    def unfocus(self):
+        self.border_color = unfocused_border_pixel
+        self.update()
+
+    def update(self):
+        if self.managed:
+            self.__update()
+
+    def __update(self):
+        values = [self.border_color, EventMask.EnterWindow|EventMask.PropertyChange|EventMask.FocusChange]
+        con.core.ChangeWindowAttributesChecked(self.id, CW.BorderPixel|CW.EventMask, values)
+        con.core.MapWindow(self.id)
 
     def manage(self):
         if self.managed:
             return
 
-        values = [EventMask.EnterWindow|EventMask.PropertyChange|EventMask.FocusChange]
-        con.core.ChangeWindowAttributesChecked(self.id, CW.EventMask, values)
         self.managed = True
+        self.__update()
 
     def destroy(self):
         pass
@@ -230,28 +260,7 @@ class Client:
         con.core.ConfigureWindow(self.id, mask, values)
 
     def synthetic_configure_notify(self):
-        """ cf. xcb/xproto.h
-865 #define XCB_CONFIGURE_NOTIFY 22
-866 
-867 /**
-868  * @brief xcb_configure_notify_event_t
-869  **/
-870 typedef struct xcb_configure_notify_event_t {
-871     uint8_t      response_type; /**<  */
-872     uint8_t      pad0; /**<  */
-873     uint16_t     sequence; /**<  */
-874     xcb_window_t event; /**<  */
-875     xcb_window_t window; /**<  */
-876     xcb_window_t above_sibling; /**<  */
-877     int16_t      x; /**<  */
-878     int16_t      y; /**<  */
-879     uint16_t     width; /**<  */
-880     uint16_t     height; /**<  */
-881     uint16_t     border_width; /**<  */
-882     uint8_t      override_redirect; /**<  */
-883     uint8_t      pad1; /**<  */
-884 } xcb_configure_notify_event_t;
-"""
+        # cf. xcb/xproto.h
         event = pack("=B3xIIIHHHHHBx",
                      22, self.id, self.id, 0,
                      self.geo_want.x, self.geo_want.y, self.geo_want.w, self.geo_want.h, self.geo_want.b,0)
@@ -340,14 +349,20 @@ def event_map_window(event):
     client = scr.get_client(event.window)
     if client is not None:
         scr.map(client)
+    else:
+        con.core.MapWindow(event.window)
 
-    con.core.MapWindow(event.window)
-
+def event_enter_notify(event):
+    scr = current_screen()
+    client = scr.get_client(event.event)
+    if client is not None:
+        scr.update_focus(client)
 
 event_handlers = { CreateNotifyEvent:event_create_notify,
                    DestroyNotifyEvent:event_destroy_notify,
                    ConfigureRequestEvent:event_configure_window_request,
-                   MapRequestEvent:event_map_window
+                   MapRequestEvent:event_map_window,
+                   EnterNotifyEvent:event_enter_notify
                    }
 
 def event_handler(event):
