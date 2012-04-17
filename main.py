@@ -64,46 +64,27 @@ setup = con.get_setup()
 # Layouts
 #
 class LayoutTall:
-    def __init__(self, screen):
+    def __init__(self, screen, master_mapper, slaves_mapper):
         self.screen = screen
         self.master = None
         self.slaves = {}
         self.slaves_ordered = []
+        self.__master_mapper = master_mapper
+        self.__slaves_mapper = slaves_mapper
 
-    def map(self, nc):
-        nc.geo_real.b = 1
-        nc.geo_real.x = 0
-        nc.geo_real.y = 0
-        nc.geo_real.h = self.screen.height - 2*nc.geo_real.b
-
+    def map(self, c):
         if self.master is not None:
             self.slaves[self.master.id] = self.master
             self.slaves_ordered.insert(0,self.master.id)
 
-        self.master = nc
-
-        if len(self.slaves_ordered) == 0:
-            self.master.geo_real.w = self.screen.width - 2*nc.geo_real.b
-        else:
-            self.master.geo_real.w = self.screen.width/2 - 2*nc.geo_real.b
-            self.remap_slaves()
-
+        self.master = c
+        self.__master_mapper()
         self.master.manage()
         self.master.real_configure_notify()
+        self.__slaves_mapper()
 
-    def remap_slaves(self):
-        L = len(self.slaves_ordered)
-        H = self.screen.height/L
-        for i in range(L):
-            c = self.slaves[self.slaves_ordered[i]]
-            c.geo_real.x = self.screen.width/2
-            c.geo_real.y = i*H
-            c.geo_real.w = self.screen.width/2 - 2*c.geo_real.b
-            c.geo_real.h = H - (2*c.geo_real.b)
-            c.real_configure_notify()
-
-    def unmap(self, nc):
-        if nc.id == self.master.id:
+    def unmap(self, c):
+        if c.id == self.master.id:
             self.master = None
             if len(self.slaves_ordered) != 0:
                 nm = self.slaves[self.slaves_ordered[0]]
@@ -111,15 +92,71 @@ class LayoutTall:
                 self.slaves_ordered = self.slaves_ordered[1:]
                 self.map(nm)
         else:
-            self.slaves_ordered.remove(nc.id)
-            self.slaves[nc.id] = None
+            self.slaves_ordered.remove(c.id)
+            self.slaves[c.id] = None
 
-            if len(self.slaves_ordered) != 0:
-                self.remap_slaves()
-            else:
+            if len(self.slaves_ordered) == 0:
                 nm = self.master
                 self.master = None
                 self.map(nm)
+            else:
+                self.__slaves_mapper()
+
+class LayoutVTall(LayoutTall):
+    def __init__(self, screen):
+        LayoutTall.__init__(self, screen, self.__map_master, self.__map_slaves)
+
+    def __map_master(self):
+        self.master.geo_real.b = 1
+        self.master.geo_real.x = 0
+        self.master.geo_real.y = 0
+        self.master.geo_real.h = self.screen.height - 2*self.master.geo_real.b
+
+        if len(self.slaves_ordered) == 0:
+            self.master.geo_real.w = self.screen.width - 2*self.master.geo_real.b
+        else:
+            self.master.geo_real.w = self.screen.width/2 - 2*self.master.geo_real.b
+
+    def __map_slaves(self):
+        if len(self.slaves_ordered) == 0:
+            return
+        L = len(self.slaves_ordered)
+        H = self.screen.height/L
+        for i in range(L):
+            c = self.slaves[self.slaves_ordered[i]]
+            c.geo_real.x = self.screen.width/2
+            c.geo_real.y = i*H
+            c.geo_real.w = self.screen.width/2 - 2*c.geo_real.b
+            c.geo_real.h = H - 2*c.geo_real.b
+            c.real_configure_notify()
+
+class LayoutHTall(LayoutTall):
+    def __init__(self, screen):
+        LayoutTall.__init__(self, screen, self.__map_master, self.__map_slaves)
+
+    def __map_master(self):
+        self.master.geo_real.b = 1
+        self.master.geo_real.x = 0
+        self.master.geo_real.y = 0
+        self.master.geo_real.w = self.screen.width - 2*self.master.geo_real.b
+
+        if len(self.slaves_ordered) == 0:
+            self.master.geo_real.h = self.screen.height - 2*self.master.geo_real.b
+        else:
+            self.master.geo_real.h = self.screen.height/2 - 2*self.master.geo_real.b
+
+    def __map_slaves(self):
+        if len(self.slaves_ordered) == 0:
+            return
+        L = len(self.slaves_ordered)
+        W = self.screen.width/L
+        for i in range(L):
+            c = self.slaves[self.slaves_ordered[i]]
+            c.geo_real.y = self.screen.height/2
+            c.geo_real.x = i*W
+            c.geo_real.h = self.screen.height/2 - 2*c.geo_real.b
+            c.geo_real.w = W - (2*c.geo_real.b)
+            c.real_configure_notify()
 
 #
 # Screens
@@ -132,7 +169,8 @@ class Screen:
         self.visual = screen.root_visual
         self.depth = screen.root_depth
         self.__clients = {}
-        self.layout = LayoutTall(self)
+        self.__layouts = [LayoutVTall(self), LayoutHTall(self)]
+        self.current_layout = 1
         self.focused_client = None
 
     def add_client(self, client):
@@ -147,10 +185,10 @@ class Screen:
         return self.__clients.get(id, None)
 
     def map(self, client):
-        self.layout.map(client)
+        self.__layouts[self.current_layout].map(client)
 
     def unmap(self, client):
-        self.layout.unmap(client)
+        self.__layouts[self.current_layout].unmap(client)
 
     def update_focus(self, client):
         if self.focused_client is not None:
