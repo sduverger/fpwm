@@ -194,8 +194,10 @@ class Screen:
     def del_client(self, client):
         if self.focused_client == client:
             client.unfocus()
+            self.focused_client = None
+
         self.__clients.__delitem__(client.id)
-        if len(self.__clients) == 0:
+        if len(self.__clients) == 0 and self.focused_client != None:
             self.focused_client = None
 
     def get_client(self, id):
