@@ -384,10 +384,10 @@ def event_handler(event):
 #
 # Main
 #
-screens = []
+_screens = []
 
 def current_screen():
-    return screens[0]
+    return _screens[0]
 
 con = xcb.connect()
 con.core.GrabServer()
@@ -404,7 +404,7 @@ for n in atoms:
 for s in setup.roots:
     sc = Screen(s)
     sc.setup(con, atoms)
-    screens.append(sc)
+    _screens.append(sc)
 
 while con.poll_for_event():
     pass
