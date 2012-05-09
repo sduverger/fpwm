@@ -192,7 +192,9 @@ class Screen:
         self.__clients[client.id] = client
 
     def del_client(self, client):
-        self.__clients[client.id] = None
+        if self.focused_client == client:
+            client.unfocus()
+        self.__clients.__delitem__(client.id)
         if len(self.__clients) == 0:
             self.focused_client = None
 
@@ -402,9 +404,9 @@ for n in atoms:
     atoms[n] = atoms[n].reply().atom
 
 for s in setup.roots:
-    sc = Screen(s)
-    sc.setup(con, atoms)
-    _screens.append(sc)
+    scr = Screen(s)
+    scr.setup(con, atoms)
+    _screens.append(scr)
 
 while con.poll_for_event():
     pass
