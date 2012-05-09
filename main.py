@@ -55,10 +55,6 @@ atom_names = ["_NET_SUPPORTED",
               # "_NET_WM_STATE_DEMANDS_ATTENTION"
               ]
 
-con = xcb.connect()
-con.core.GrabServer()
-
-setup = con.get_setup()
 
 def Flat(format, data):
     f={32:'I',16:'H',8:'B'}[format]
@@ -179,8 +175,18 @@ class Screen:
         self.depth = screen.root_depth
         self.__clients = {}
         self.__layouts = [LayoutVTall(self), LayoutHTall(self)]
-        self.current_layout = 1
+        self.current_layout = 0
         self.focused_client = None
+
+    def setup(self, con, atoms):
+        ChangeProperty(con.core, PropMode.Replace, self.root, atoms["_NET_SUPPORTED"], Atom.ATOM, 32, len(atoms), atoms.itervalues())
+        self.vroot = con.generate_id()
+        con.core.CreateWindow(self.depth, self.vroot, self.root, -1, -1, 1, 1, 0, WindowClass.CopyFromParent, self.visual, 0, [])
+        print "Root window: %d | Virtual root: %d" % (self.root, self.vroot)
+        ChangeProperty(con.core, PropMode.Replace, self.root,  atoms["_NET_SUPPORTING_WM_CHECK"], Atom.WINDOW, 32, 1, self.vroot)
+        ChangeProperty(con.core, PropMode.Replace, self.vroot, atoms["_NET_SUPPORTING_WM_CHECK"], Atom.WINDOW, 32, 1, self.vroot)
+        ChangeProperty(con.core, PropMode.Replace, self.vroot, atoms["_NET_WM_NAME"], Atom.STRING, 8, len(wmname), wmname)
+        ChangeProperty(con.core, PropMode.Replace, self.vroot, atoms["_NET_WM_PID"], Atom.CARDINAL, 32, 1, os.getpid())
 
     def add_client(self, client):
         self.__clients[client.id] = client
@@ -205,46 +211,6 @@ class Screen:
         self.focused_client = client
         self.focused_client.focus()
 
-
-screens = []
-for s in setup.roots:
-    screens.append(Screen(s))
-
-def current_screen():
-    return screens[0]
-
-atoms = {}
-for n in atom_names:
-    atoms[n] = con.core.InternAtom(False, len(n), n)
-
-for n in atoms:
-    atoms[n] = atoms[n].reply().atom
-
-ChangeProperty(con.core, PropMode.Replace, screens[0].root, atoms["_NET_SUPPORTED"], Atom.ATOM, 32, len(atoms), atoms.itervalues())
-
-virtual_root = con.generate_id()
-con.core.CreateWindow(screens[0].depth, virtual_root,
-                      screens[0].root, -1, -1, 1, 1, 0, WindowClass.CopyFromParent, screens[0].visual, 0, [])
-
-print "Root window: %d | Virtual root: %d" % (screens[0].root, virtual_root)
-
-ChangeProperty(con.core, PropMode.Replace, screens[0].root, atoms["_NET_SUPPORTING_WM_CHECK"], Atom.WINDOW, 32, 1, virtual_root)
-ChangeProperty(con.core, PropMode.Replace, virtual_root, atoms["_NET_SUPPORTING_WM_CHECK"],Atom.WINDOW, 32, 1, virtual_root)
-ChangeProperty(con.core, PropMode.Replace, virtual_root, atoms["_NET_WM_NAME"], Atom.STRING, 8, len(wmname), wmname)
-ChangeProperty(con.core, PropMode.Replace, virtual_root, atoms["_NET_WM_PID"], Atom.CARDINAL, 32, 1, os.getpid())
-
-while con.poll_for_event():
-    pass
-
-try:
-    con.core.ChangeWindowAttributesChecked(screens[0].root, CW.EventMask, events).check()
-except BadAccess, e:
-    print "A window manager is already running !"
-    con.disconnect()
-    sys.exit(1)
-
-con.core.UngrabServer()
-con.flush()
 
 #
 # Clients
@@ -418,6 +384,41 @@ def event_handler(event):
 #
 # Main
 #
+screens = []
+
+def current_screen():
+    return screens[0]
+
+con = xcb.connect()
+con.core.GrabServer()
+
+setup = con.get_setup()
+
+atoms = {}
+for n in atom_names:
+    atoms[n] = con.core.InternAtom(False, len(n), n)
+
+for n in atoms:
+    atoms[n] = atoms[n].reply().atom
+
+for s in setup.roots:
+    sc = Screen(s)
+    sc.setup(con, atoms)
+    screens.append(sc)
+
+while con.poll_for_event():
+    pass
+
+try:
+    con.core.ChangeWindowAttributesChecked(current_screen().root, CW.EventMask, events).check()
+except BadAccess, e:
+    print "A window manager is already running !"
+    con.disconnect()
+    sys.exit(1)
+
+con.core.UngrabServer()
+con.flush()
+
 while True:
     try:
         event = con.wait_for_event()
