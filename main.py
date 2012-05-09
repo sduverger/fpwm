@@ -55,7 +55,6 @@ atom_names = ["_NET_SUPPORTED",
               # "_NET_WM_STATE_DEMANDS_ATTENTION"
               ]
 
-
 def Flat(format, data):
     f={32:'I',16:'H',8:'B'}[format]
     if not hasattr(data, "__iter__") and not hasattr(data, "__getitem__"):
@@ -138,6 +137,9 @@ class LayoutHTall(LayoutTall):
 # Screens
 #
 class Screen:
+    focused_color = 0x94bff3
+    passive_color = 0x505050
+
     def __init__(self, screen):
         self.root = screen.root
         self.width = screen.width_in_pixels
@@ -219,20 +221,21 @@ class Geometry:
         self.h = h
         self.b = b
 
-focused_border_pixel = 0x94bff3
-unfocused_border_pixel = 0x505050
-
 class KeyMap:
-    modifier = ModMask._1|ModMask._2 #_2 is always set on KeyEvent (xcb bug ?)
+    # XXX: ModMask._2 is always set on KeyEvent (xcb bug ?)
+    modifier = ModMask._1|ModMask._2
     space = 65
 
 class Keyboard:
     def __init__(self):
-        pass
+        self.__hotkeys = {
+            KeyMap.space: lambda: current_screen().next_layout()
+            }
 
-    def shortcut(self, key):
-        if key == KeyMap.space:
-            current_screen().next_layout()
+    def action(self, key):
+        act = self.__hotkeys.get(key, None)
+        if act is not None:
+            act()
 
 class Client:
     def __init__(self, event):
@@ -240,19 +243,19 @@ class Client:
         self.parent = event.parent
         self.geo_real = Geometry(event.x, event.y, event.width, event.height, event.border_width)
         self.geo_want = Geometry(event.x, event.y, event.width, event.height, event.border_width)
-        self.border_color = unfocused_border_pixel
+        self.border_color = Screen.passive_color
         self.managed = False
 
     def focus(self):
         cookie = con.core.GrabKeyChecked(False, self.id, KeyMap.modifier, 0, GrabMode.Async, GrabMode.Async)
         print "GrabKey",cookie.check()
 
-        self.border_color = focused_border_pixel
+        self.border_color = Screen.focused_color
         self.update()
 
     def unfocus(self):
         con.core.UngrabKey(False, self.id, ModMask.Any)
-        self.border_color = unfocused_border_pixel
+        self.border_color = Screen.passive_color
         self.update()
 
     def update(self):
@@ -380,7 +383,7 @@ def event_enter_notify(event):
         scr.update_focus(client)
 
 def event_key_press(event):
-    keyboard.shortcut(event.detail)
+    keyboard.action(event.detail)
 
 def event_key_release(event):
     print "Release:",event.detail, event.state, event.time
