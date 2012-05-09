@@ -71,97 +71,68 @@ def ChangeProperty(core, mode, window, property, type, format, data_len, data):
 class LayoutTall:
     def __init__(self, screen, master_mapper, slaves_mapper):
         self.screen = screen
-        self.master = None
-        self.slaves = {}
-        self.slaves_ordered = []
         self.__master_mapper = master_mapper
         self.__slaves_mapper = slaves_mapper
 
-    def map(self, c):
-        if self.master is not None:
-            self.slaves[self.master.id] = self.master
-            self.slaves_ordered.insert(0,self.master.id)
-
-        self.master = c
-        self.__master_mapper()
-        self.master.manage()
-        self.master.real_configure_notify()
-        self.__slaves_mapper()
-
-    def unmap(self, c):
-        if c.id == self.master.id:
-            self.master = None
-            if len(self.slaves_ordered) != 0:
-                nm = self.slaves[self.slaves_ordered[0]]
-                self.slaves[nm.id] = None
-                self.slaves_ordered = self.slaves_ordered[1:]
-                self.map(nm)
-        else:
-            self.slaves_ordered.remove(c.id)
-            self.slaves[c.id] = None
-
-            if len(self.slaves_ordered) == 0:
-                nm = self.master
-                self.master = None
-                self.map(nm)
-            else:
-                self.__slaves_mapper()
+    def update(self, master, slaves):
+        self.__master_mapper(master, slaves)
+        master.manage()
+        master.real_configure_notify()
+        self.__slaves_mapper(slaves)
 
 class LayoutVTall(LayoutTall):
     def __init__(self, screen):
         LayoutTall.__init__(self, screen, self.__map_master, self.__map_slaves)
 
-    def __map_master(self):
-        self.master.geo_real.b = 1
-        self.master.geo_real.x = 0
-        self.master.geo_real.y = 0
-        self.master.geo_real.h = self.screen.height - 2*self.master.geo_real.b
+    def __map_master(self, master, slaves):
+        master.geo_real.b = 1
+        master.geo_real.x = 0
+        master.geo_real.y = 0
+        master.geo_real.h = self.screen.height - 2*master.geo_real.b
 
-        if len(self.slaves_ordered) == 0:
-            self.master.geo_real.w = self.screen.width - 2*self.master.geo_real.b
+        if len(slaves) == 0:
+            master.geo_real.w = self.screen.width - 2*master.geo_real.b
         else:
-            self.master.geo_real.w = self.screen.width/2 - 2*self.master.geo_real.b
+            master.geo_real.w = self.screen.width/2 - 2*master.geo_real.b
 
-    def __map_slaves(self):
-        if len(self.slaves_ordered) == 0:
-            return
-        L = len(self.slaves_ordered)
-        H = self.screen.height/L
-        for i in range(L):
-            c = self.slaves[self.slaves_ordered[i]]
-            c.geo_real.x = self.screen.width/2
-            c.geo_real.y = i*H
-            c.geo_real.w = self.screen.width/2 - 2*c.geo_real.b
-            c.geo_real.h = H - 2*c.geo_real.b
-            c.real_configure_notify()
+    def __map_slaves(self, slaves):
+        L = len(slaves)
+        if L != 0:
+            H = self.screen.height/L
+            for i in range(L):
+                c = slaves[i]
+                c.geo_real.x = self.screen.width/2
+                c.geo_real.y = i*H
+                c.geo_real.w = self.screen.width/2 - 2*c.geo_real.b
+                c.geo_real.h = H - 2*c.geo_real.b
+                c.real_configure_notify()
 
 class LayoutHTall(LayoutTall):
     def __init__(self, screen):
         LayoutTall.__init__(self, screen, self.__map_master, self.__map_slaves)
 
-    def __map_master(self):
-        self.master.geo_real.b = 1
-        self.master.geo_real.x = 0
-        self.master.geo_real.y = 0
-        self.master.geo_real.w = self.screen.width - 2*self.master.geo_real.b
+    def __map_master(self, master, slaves):
+        master.geo_real.b = 1
+        master.geo_real.x = 0
+        master.geo_real.y = 0
+        master.geo_real.w = self.screen.width - 2*master.geo_real.b
 
-        if len(self.slaves_ordered) == 0:
-            self.master.geo_real.h = self.screen.height - 2*self.master.geo_real.b
+        if len(slaves) == 0:
+            master.geo_real.h = self.screen.height - 2*master.geo_real.b
         else:
-            self.master.geo_real.h = self.screen.height/2 - 2*self.master.geo_real.b
+            master.geo_real.h = self.screen.height/2 - 2*master.geo_real.b
 
-    def __map_slaves(self):
-        if len(self.slaves_ordered) == 0:
-            return
-        L = len(self.slaves_ordered)
-        W = self.screen.width/L
-        for i in range(L):
-            c = self.slaves[self.slaves_ordered[i]]
-            c.geo_real.y = self.screen.height/2
-            c.geo_real.x = i*W
-            c.geo_real.h = self.screen.height/2 - 2*c.geo_real.b
-            c.geo_real.w = W - (2*c.geo_real.b)
-            c.real_configure_notify()
+    def __map_slaves(self, slaves):
+        L = len(slaves)
+        if L != 0:
+            W = self.screen.width/L
+            for i in range(L):
+                c = slaves[i]
+                c.geo_real.y = self.screen.height/2
+                c.geo_real.x = i*W
+                c.geo_real.h = self.screen.height/2 - 2*c.geo_real.b
+                c.geo_real.w = W - (2*c.geo_real.b)
+                c.real_configure_notify()
 
 #
 # Screens
@@ -174,11 +145,13 @@ class Screen:
         self.visual = screen.root_visual
         self.depth = screen.root_depth
         self.__clients = {}
+        self.__master = None
+        self.__slaves = []
         self.__layouts = [LayoutVTall(self), LayoutHTall(self)]
         self.current_layout = 0
         self.focused_client = None
 
-    def setup(self, con, atoms):
+    def setup(self):
         ChangeProperty(con.core, PropMode.Replace, self.root, atoms["_NET_SUPPORTED"], Atom.ATOM, 32, len(atoms), atoms.itervalues())
         self.vroot = con.generate_id()
         con.core.CreateWindow(self.depth, self.vroot, self.root, -1, -1, 1, 1, 0, WindowClass.CopyFromParent, self.visual, 0, [])
@@ -203,11 +176,30 @@ class Screen:
     def get_client(self, id):
         return self.__clients.get(id, None)
 
+    def update(self):
+        self.__layouts[self.current_layout].update(self.__master, self.__slaves)
+
+    def next_layout(self):
+        self.current_layout = (self.current_layout+1)%len(self.__layouts)
+        self.update()
+
     def map(self, client):
-        self.__layouts[self.current_layout].map(client)
+        if self.__master is not None:
+            self.__slaves.insert(0,self.__master)
+
+        self.__master = client
+        self.update()
 
     def unmap(self, client):
-        self.__layouts[self.current_layout].unmap(client)
+        if self.__master.id == client.id:
+            self.__master = None
+            if len(self.__slaves) == 0:
+                return
+            self.__master = self.__slaves.pop(0)
+        else:
+            self.__slaves.remove(client)
+
+        self.update()
 
     def update_focus(self, client):
         if self.focused_client is not None:
@@ -230,6 +222,18 @@ class Geometry:
 focused_border_pixel = 0x94bff3
 unfocused_border_pixel = 0x505050
 
+class KeyMap:
+    modifier = ModMask._1|ModMask._2 #_2 is always set on KeyEvent (xcb bug ?)
+    space = 65
+
+class Keyboard:
+    def __init__(self):
+        pass
+
+    def shortcut(self, key):
+        if key == KeyMap.space:
+            current_screen().next_layout()
+
 class Client:
     def __init__(self, event):
         self.id = event.window
@@ -240,10 +244,14 @@ class Client:
         self.managed = False
 
     def focus(self):
+        cookie = con.core.GrabKeyChecked(False, self.id, KeyMap.modifier, 0, GrabMode.Async, GrabMode.Async)
+        print "GrabKey",cookie.check()
+
         self.border_color = focused_border_pixel
         self.update()
 
     def unfocus(self):
+        con.core.UngrabKey(False, self.id, ModMask.Any)
         self.border_color = unfocused_border_pixel
         self.update()
 
@@ -252,7 +260,8 @@ class Client:
             self.__update()
 
     def __update(self):
-        values = [self.border_color, EventMask.EnterWindow|EventMask.PropertyChange|EventMask.FocusChange]
+        mask  = EventMask.EnterWindow|EventMask.PropertyChange|EventMask.FocusChange
+        values = [self.border_color, mask]
         con.core.ChangeWindowAttributesChecked(self.id, CW.BorderPixel|CW.EventMask, values)
         #con.core.MapWindow(self.id)
 
@@ -370,11 +379,19 @@ def event_enter_notify(event):
     if client is not None:
         scr.update_focus(client)
 
+def event_key_press(event):
+    keyboard.shortcut(event.detail)
+
+def event_key_release(event):
+    print "Release:",event.detail, event.state, event.time
+
 event_handlers = { CreateNotifyEvent:event_create_notify,
                    DestroyNotifyEvent:event_destroy_notify,
                    ConfigureRequestEvent:event_configure_window_request,
                    MapRequestEvent:event_map_window,
-                   EnterNotifyEvent:event_enter_notify
+                   EnterNotifyEvent:event_enter_notify,
+                   KeyPressEvent:event_key_press,
+                   KeyReleaseEvent:event_key_release
                    }
 
 def event_handler(event):
@@ -388,6 +405,7 @@ def event_handler(event):
 #
 # Main
 #
+keyboard = Keyboard()
 _screens = []
 
 def current_screen():
@@ -407,7 +425,7 @@ for n in atoms:
 
 for s in setup.roots:
     scr = Screen(s)
-    scr.setup(con, atoms)
+    scr.setup()
     _screens.append(scr)
 
 while con.poll_for_event():
