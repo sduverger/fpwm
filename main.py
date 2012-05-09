@@ -64,14 +64,10 @@ def Flat(format, data):
     f={32:'I',16:'H',8:'B'}[format]
     if not hasattr(data, "__iter__") and not hasattr(data, "__getitem__"):
         data = [data]
-    print data
     return array(f, data).tostring()
 
-def ChangeProperty(mode, window, property, type, format, data_len, data):
-    global con
-    hdr = pack('=xB2xIIIB3xI', mode, window, property, type, format, data_len)
-    msg = Flat(format, data)
-    return con.core.send_request(xcb.Request(hdr+msg, 18, True, False), xcb.VoidCookie())
+def ChangeProperty(core, mode, window, property, type, format, data_len, data):
+    core.ChangeProperty(mode, window, property, type, format, data_len, Flat(format, data))
 
 #
 # Layouts
@@ -224,7 +220,7 @@ for n in atom_names:
 for n in atoms:
     atoms[n] = atoms[n].reply().atom
 
-ChangeProperty(PropMode.Replace, screens[0].root, atoms["_NET_SUPPORTED"], Atom.ATOM, 32, len(atoms), atoms.itervalues())
+ChangeProperty(con.core, PropMode.Replace, screens[0].root, atoms["_NET_SUPPORTED"], Atom.ATOM, 32, len(atoms), atoms.itervalues())
 
 virtual_root = con.generate_id()
 con.core.CreateWindow(screens[0].depth, virtual_root,
@@ -232,10 +228,10 @@ con.core.CreateWindow(screens[0].depth, virtual_root,
 
 print "Root window: %d | Virtual root: %d" % (screens[0].root, virtual_root)
 
-ChangeProperty(PropMode.Replace, screens[0].root, atoms["_NET_SUPPORTING_WM_CHECK"], Atom.WINDOW, 32, 1, virtual_root)
-ChangeProperty(PropMode.Replace, virtual_root, atoms["_NET_SUPPORTING_WM_CHECK"],Atom.WINDOW, 32, 1, virtual_root)
-ChangeProperty(PropMode.Replace, virtual_root, atoms["_NET_WM_NAME"], Atom.STRING, 8, len(wmname), wmname)
-ChangeProperty(PropMode.Replace, virtual_root, atoms["_NET_WM_PID"], Atom.CARDINAL, 32, 1, os.getpid())
+ChangeProperty(con.core, PropMode.Replace, screens[0].root, atoms["_NET_SUPPORTING_WM_CHECK"], Atom.WINDOW, 32, 1, virtual_root)
+ChangeProperty(con.core, PropMode.Replace, virtual_root, atoms["_NET_SUPPORTING_WM_CHECK"],Atom.WINDOW, 32, 1, virtual_root)
+ChangeProperty(con.core, PropMode.Replace, virtual_root, atoms["_NET_WM_NAME"], Atom.STRING, 8, len(wmname), wmname)
+ChangeProperty(con.core, PropMode.Replace, virtual_root, atoms["_NET_WM_PID"], Atom.CARDINAL, 32, 1, os.getpid())
 
 while con.poll_for_event():
     pass
