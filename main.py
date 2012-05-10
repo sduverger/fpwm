@@ -378,12 +378,14 @@ def event_motion_notify(event):
     mouse.move(event)
 
 def event_button_press(event):
-    mouse.press(event.detail)
+    mouse.press(event)
 
 def event_button_release(event):
-    mouse.release(event.detail)
+    mouse.release(event)
 
-events = [EventMask.SubstructureRedirect|EventMask.SubstructureNotify|EventMask.EnterWindow|EventMask.LeaveWindow|EventMask.StructureNotify|EventMask.PropertyChange|EventMask.ButtonPress|EventMask.ButtonRelease|EventMask.FocusChange]
+#|EventMask.LeaveWindow
+#|EventMask.ButtonPress|EventMask.ButtonRelease
+events = [EventMask.SubstructureRedirect|EventMask.SubstructureNotify|EventMask.EnterWindow|EventMask.StructureNotify|EventMask.PropertyChange|EventMask.FocusChange]
 
 event_handlers = { CreateNotifyEvent:event_create_notify,
                    DestroyNotifyEvent:event_destroy_notify,
@@ -452,11 +454,11 @@ class Mouse:
             b = "3"
         print "pointer moved:", b
 
-    def press(self, button):
-        print "button press", button
+    def press(self, event):
+        print "button press", event.detail
 
-    def release(self, button):
-        print "button release", button
+    def release(self, event):
+        print "button release", event.detail
 
 #
 # Main
