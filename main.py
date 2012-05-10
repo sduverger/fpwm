@@ -375,7 +375,7 @@ def event_key_release(event):
     print "Release:",event.detail, event.state, event.time
 
 def event_motion_notify(event):
-    mouse.move(event)
+    mouse.motion(event)
 
 def event_button_press(event):
     mouse.press(event)
@@ -410,20 +410,22 @@ def event_handler(event):
 #
 # Keyboard & Mouse
 #
-class KeyMap:
+class Mappings:
     # XXX: Mod2 is always set on KeyEvent (python-xcb or Xephyr bug ?)
     modifier = KeyButMask.Mod1|KeyButMask.Mod2
     space = 65
+    move_button = 1
+    resize_button = 3
 
 class Keyboard:
     def __init__(self):
         self.__hotkeys = {
-            KeyMap.space: lambda: current_screen().next_layout()
+            Mappings.space: lambda: current_screen().next_layout()
             }
 
     def attach(self):
         c = current_client()
-        con.core.GrabKey(False, c, KeyMap.modifier, 0, GrabMode.Async, GrabMode.Async)
+        con.core.GrabKey(False, c, Mappings.modifier, 0, GrabMode.Async, GrabMode.Async)
 
     def detach(self):
         c = current_client()
@@ -434,31 +436,43 @@ class Keyboard:
         if act is not None:
             act()
 
+#
+# We thought we can update mask to prevent other button press/release while move/resize
+# however this did not work as expected so we do it our own way
+#
 class Mouse:
     def __init__(self):
-        pass
+        self.__mv_b_mask = eval("EventMask.Button%dMotion" % Mappings.move_button)
+        self.__rz_b_mask = eval("EventMask.Button%dMotion" % Mappings.resize_button)
 
     def attach(self):
-        c = current_client()
-        mask = EventMask.Button1Motion|EventMask.Button3Motion|EventMask.ButtonPress|EventMask.ButtonRelease
-        con.core.GrabButton(False, c, mask, GrabMode.Async, GrabMode.Async, 0, 0, 0, KeyMap.modifier)
+        mask = EventMask.ButtonPress|EventMask.ButtonRelease|EventMask.Button1Motion|EventMask.Button3Motion
+        button = 0 #any
+        con.core.GrabButton(False, current_client(), mask, GrabMode.Async, GrabMode.Async, 0, 0, button, Mappings.modifier)
 
     def detach(self):
-        c = current_client()
-        con.core.UngrabButton(False, c, ButtonMask.Any)
+        con.core.UngrabButton(False, current_client(), ButtonMask.Any)
+
+    def motion(self, event):
+        # several buttons may be selected, however move is higher priority for us
+        if event.state & self.__mv_b_mask:
+            return self.move(event)
+        elif event.state & self.__rz_b_mask:
+            return self.resize(event)
 
     def move(self, event):
-        if event.state & EventMask.Button1Motion:
-            b = "1"
-        else:
-            b = "3"
-        print "pointer moved:", b
+        print "move"
+
+    def resize(self, event):
+        print "resize"
 
     def press(self, event):
-        print "button press", event.detail
+        button = event.detail
+        print "press", button
 
     def release(self, event):
-        print "button release", event.detail
+        button = event.detail
+        print "release", button
 
 #
 # Main
