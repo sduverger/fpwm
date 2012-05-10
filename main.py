@@ -374,6 +374,15 @@ def event_key_press(event):
 def event_key_release(event):
     print "Release:",event.detail, event.state, event.time
 
+def event_motion_notify(event):
+    mouse.move(event)
+
+def event_button_press(event):
+    mouse.press(event.detail)
+
+def event_button_release(event):
+    mouse.release(event.detail)
+
 events = [EventMask.SubstructureRedirect|EventMask.SubstructureNotify|EventMask.EnterWindow|EventMask.LeaveWindow|EventMask.StructureNotify|EventMask.PropertyChange|EventMask.ButtonPress|EventMask.ButtonRelease|EventMask.FocusChange]
 
 event_handlers = { CreateNotifyEvent:event_create_notify,
@@ -382,7 +391,10 @@ event_handlers = { CreateNotifyEvent:event_create_notify,
                    MapRequestEvent:event_map_window,
                    EnterNotifyEvent:event_enter_notify,
                    KeyPressEvent:event_key_press,
-                   KeyReleaseEvent:event_key_release
+                   KeyReleaseEvent:event_key_release,
+                   MotionNotifyEvent:event_motion_notify,
+                   ButtonPressEvent:event_button_press,
+                   ButtonReleaseEvent:event_button_release,
                    }
 
 def event_handler(event):
@@ -394,11 +406,11 @@ def event_handler(event):
         hdl(event)
 
 #
-# Keyboard
+# Keyboard & Mouse
 #
 class KeyMap:
-    # XXX: ModMask._2 is always set on KeyEvent (xcb bug ?)
-    modifier = ModMask._1|ModMask._2
+    # XXX: Mod2 is always set on KeyEvent (python-xcb or Xephyr bug ?)
+    modifier = KeyButMask.Mod1|KeyButMask.Mod2
     space = 65
 
 class Keyboard:
@@ -410,8 +422,6 @@ class Keyboard:
     def attach(self):
         c = current_client()
         con.core.GrabKey(False, c, KeyMap.modifier, 0, GrabMode.Async, GrabMode.Async)
-        #cookie = con.core.GrabKeyChecked(False, c, KeyMap.modifier, 0, GrabMode.Async, GrabMode.Async)
-        #print "GrabKey",cookie.check()
 
     def detach(self):
         c = current_client()
@@ -422,10 +432,37 @@ class Keyboard:
         if act is not None:
             act()
 
+class Mouse:
+    def __init__(self):
+        pass
+
+    def attach(self):
+        c = current_client()
+        mask = EventMask.Button1Motion|EventMask.Button3Motion|EventMask.ButtonPress|EventMask.ButtonRelease
+        con.core.GrabButton(False, c, mask, GrabMode.Async, GrabMode.Async, 0, 0, 0, KeyMap.modifier)
+
+    def detach(self):
+        c = current_client()
+        con.core.UngrabButton(False, c, ButtonMask.Any)
+
+    def move(self, event):
+        if event.state & EventMask.Button1Motion:
+            b = "1"
+        else:
+            b = "3"
+        print "pointer moved:", b
+
+    def press(self, button):
+        print "button press", button
+
+    def release(self, button):
+        print "button release", button
+
 #
 # Main
 #
 keyboard = Keyboard()
+mouse = Mouse()
 _screens = []
 
 def current_screen():
@@ -467,6 +504,7 @@ except BadAccess, e:
 con.core.UngrabServer()
 con.flush()
 keyboard.attach()
+mouse.attach()
 
 while True:
     try:
@@ -479,5 +517,6 @@ while True:
     event_handler(event)
     con.flush()
 
+mouse.detach()
 keyboard.detach()
 con.disconnect()
