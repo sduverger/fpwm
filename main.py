@@ -7,8 +7,6 @@ from xcb.xproto import *
 
 wmname = "fpwm"
 
-events = [EventMask.SubstructureRedirect|EventMask.SubstructureNotify|EventMask.EnterWindow|EventMask.LeaveWindow|EventMask.StructureNotify|EventMask.PropertyChange|EventMask.ButtonPress|EventMask.ButtonRelease|EventMask.FocusChange]
-
 atom_names = ["_NET_SUPPORTED",
               "_NET_SUPPORTING_WM_CHECK",
               # "_NET_STARTUP_ID",
@@ -74,10 +72,13 @@ class LayoutTall:
         self.__slaves_mapper = slaves_mapper
 
     def update(self, master, slaves):
-        self.__master_mapper(master, slaves)
+        if master == None:
+            return
+        do_slaves = self.__master_mapper(master, slaves)
         master.manage()
         master.real_configure_notify()
-        self.__slaves_mapper(slaves)
+        if do_slaves:
+            self.__slaves_mapper(slaves)
 
 class LayoutVTall(LayoutTall):
     def __init__(self, screen):
@@ -91,8 +92,10 @@ class LayoutVTall(LayoutTall):
 
         if len(slaves) == 0:
             master.geo_real.w = self.screen.width - 2*master.geo_real.b
-        else:
-            master.geo_real.w = self.screen.width/2 - 2*master.geo_real.b
+            return False
+
+        master.geo_real.w = self.screen.width/2 - 2*master.geo_real.b
+        return True
 
     def __map_slaves(self, slaves):
         L = len(slaves)
@@ -118,8 +121,10 @@ class LayoutHTall(LayoutTall):
 
         if len(slaves) == 0:
             master.geo_real.h = self.screen.height - 2*master.geo_real.b
-        else:
-            master.geo_real.h = self.screen.height/2 - 2*master.geo_real.b
+            return False
+
+        master.geo_real.h = self.screen.height/2 - 2*master.geo_real.b
+        return True
 
     def __map_slaves(self, slaves):
         L = len(slaves)
@@ -179,7 +184,8 @@ class Screen:
         return self.__clients.get(id, None)
 
     def update(self):
-        self.__layouts[self.current_layout].update(self.__master, self.__slaves)
+        if self.__master != None:
+            self.__layouts[self.current_layout].update(self.__master, self.__slaves)
 
     def next_layout(self):
         self.current_layout = (self.current_layout+1)%len(self.__layouts)
@@ -221,22 +227,6 @@ class Geometry:
         self.h = h
         self.b = b
 
-class KeyMap:
-    # XXX: ModMask._2 is always set on KeyEvent (xcb bug ?)
-    modifier = ModMask._1|ModMask._2
-    space = 65
-
-class Keyboard:
-    def __init__(self):
-        self.__hotkeys = {
-            KeyMap.space: lambda: current_screen().next_layout()
-            }
-
-    def action(self, key):
-        act = self.__hotkeys.get(key, None)
-        if act is not None:
-            act()
-
 class Client:
     def __init__(self, event):
         self.id = event.window
@@ -247,14 +237,10 @@ class Client:
         self.managed = False
 
     def focus(self):
-        cookie = con.core.GrabKeyChecked(False, self.id, KeyMap.modifier, 0, GrabMode.Async, GrabMode.Async)
-        print "GrabKey",cookie.check()
-
         self.border_color = Screen.focused_color
         self.update()
 
     def unfocus(self):
-        con.core.UngrabKey(False, self.id, ModMask.Any)
         self.border_color = Screen.passive_color
         self.update()
 
@@ -383,10 +369,12 @@ def event_enter_notify(event):
         scr.update_focus(client)
 
 def event_key_press(event):
-    keyboard.action(event.detail)
+    keyboard.action(event.detail, event.state)
 
 def event_key_release(event):
     print "Release:",event.detail, event.state, event.time
+
+events = [EventMask.SubstructureRedirect|EventMask.SubstructureNotify|EventMask.EnterWindow|EventMask.LeaveWindow|EventMask.StructureNotify|EventMask.PropertyChange|EventMask.ButtonPress|EventMask.ButtonRelease|EventMask.FocusChange]
 
 event_handlers = { CreateNotifyEvent:event_create_notify,
                    DestroyNotifyEvent:event_destroy_notify,
@@ -406,6 +394,35 @@ def event_handler(event):
         hdl(event)
 
 #
+# Keyboard
+#
+class KeyMap:
+    # XXX: ModMask._2 is always set on KeyEvent (xcb bug ?)
+    modifier = ModMask._1|ModMask._2
+    space = 65
+
+class Keyboard:
+    def __init__(self):
+        self.__hotkeys = {
+            KeyMap.space: lambda: current_screen().next_layout()
+            }
+
+    def attach(self):
+        c = current_client()
+        con.core.GrabKey(False, c, KeyMap.modifier, 0, GrabMode.Async, GrabMode.Async)
+        #cookie = con.core.GrabKeyChecked(False, c, KeyMap.modifier, 0, GrabMode.Async, GrabMode.Async)
+        #print "GrabKey",cookie.check()
+
+    def detach(self):
+        c = current_client()
+        con.core.UngrabKey(False, c, ModMask.Any)
+
+    def action(self, key, mods):
+        act = self.__hotkeys.get(key, None)
+        if act is not None:
+            act()
+
+#
 # Main
 #
 keyboard = Keyboard()
@@ -413,6 +430,12 @@ _screens = []
 
 def current_screen():
     return _screens[0]
+
+def current_client():
+    c = current_screen().focused_client
+    if c is None:
+        return current_screen().root
+    return c.id
 
 con = xcb.connect()
 con.core.GrabServer()
@@ -443,6 +466,7 @@ except BadAccess, e:
 
 con.core.UngrabServer()
 con.flush()
+keyboard.attach()
 
 while True:
     try:
@@ -455,4 +479,5 @@ while True:
     event_handler(event)
     con.flush()
 
+keyboard.detach()
 con.disconnect()
