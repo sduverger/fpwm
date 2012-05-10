@@ -75,7 +75,6 @@ class LayoutTall:
         if master == None:
             return
         do_slaves = self.__master_mapper(master, slaves)
-        master.tile()
         master.real_configure_notify()
         if do_slaves:
             self.__slaves_mapper(slaves)
@@ -192,6 +191,7 @@ class Screen:
         self.update()
 
     def map(self, client):
+        client.tile()
         if self.__master is not None:
             self.__slaves.insert(0,self.__master)
 
@@ -199,6 +199,7 @@ class Screen:
         self.update()
 
     def unmap(self, client):
+        client.untile()
         if self.__master.id == client.id:
             self.__master = None
             if len(self.__slaves) == 0:
@@ -245,13 +246,11 @@ class Client:
         self.update()
 
     def move(self, x,y):
-        self.tiled = False
         self.geo_real.x = x
         self.geo_real.y = y
         self.real_configure_notify()
 
     def resize(self, w,h):
-        self.tiled = False
         self.geo_real.w = w
         self.geo_real.h = h
         self.real_configure_notify()
@@ -267,11 +266,13 @@ class Client:
         #con.core.MapWindow(self.id)
 
     def tile(self):
-        if self.tiled:
-            return
+        if not self.tiled:
+            self.tiled = True
+            self.__update()
 
-        self.tiled = True
-        self.__update()
+    def untile(self):
+        if self.tiled:
+            self.tiled = False
 
     def destroy(self):
         pass
@@ -436,12 +437,11 @@ class Keyboard:
             }
 
     def attach(self):
-        c = current_client()
-        con.core.GrabKey(False, c, Mappings.modifier, 0, GrabMode.Async, GrabMode.Async)
+        con.core.GrabKey(False, current_client_id(), Mappings.modifier, 0, GrabMode.Async, GrabMode.Async)
 
     def detach(self):
         c = current_client()
-        con.core.UngrabKey(False, c, ModMask.Any)
+        con.core.UngrabKey(False, current_client_id(), ModMask.Any)
 
     def action(self, key, mods):
         act = self.__hotkeys.get(key, None)
@@ -463,10 +463,10 @@ class Mouse:
     def attach(self):
         mask = EventMask.ButtonPress|EventMask.ButtonRelease|EventMask.Button1Motion|EventMask.Button3Motion
         button = 0 #any
-        con.core.GrabButton(False, current_client(), mask, GrabMode.Async, GrabMode.Async, 0, 0, button, Mappings.modifier)
+        con.core.GrabButton(False, current_client_id(), mask, GrabMode.Async, GrabMode.Async, 0, 0, button, Mappings.modifier)
 
     def detach(self):
-        con.core.UngrabButton(False, current_client(), ButtonMask.Any)
+        con.core.UngrabButton(False, current_client_id(), ButtonMask.Any)
 
     def motion(self, event):
         # several buttons may be selected, however move is higher priority for us
@@ -522,7 +522,11 @@ def current_screen():
     return _screens[0]
 
 def current_client():
-    c = current_screen().focused_client
+    # may be None (no client)
+    return current_screen().focused_client
+
+def current_client_id():
+    c = current_client()
     if c is None:
         return current_screen().root
     return c.id
