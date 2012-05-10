@@ -75,7 +75,7 @@ class LayoutTall:
         if master == None:
             return
         do_slaves = self.__master_mapper(master, slaves)
-        master.manage()
+        master.tile()
         master.real_configure_notify()
         if do_slaves:
             self.__slaves_mapper(slaves)
@@ -234,7 +234,7 @@ class Client:
         self.geo_real = Geometry(event.x, event.y, event.width, event.height, event.border_width)
         self.geo_want = Geometry(event.x, event.y, event.width, event.height, event.border_width)
         self.border_color = Screen.passive_color
-        self.managed = False
+        self.tiled = False
 
     def focus(self):
         self.border_color = Screen.focused_color
@@ -244,8 +244,20 @@ class Client:
         self.border_color = Screen.passive_color
         self.update()
 
+    def move(self, x,y):
+        self.tiled = False
+        self.geo_real.x = x
+        self.geo_real.y = y
+        self.real_configure_notify()
+
+    def resize(self, w,h):
+        self.tiled = False
+        self.geo_real.w = w
+        self.geo_real.h = h
+        self.real_configure_notify()
+
     def update(self):
-        if self.managed:
+        if self.tiled:
             self.__update()
 
     def __update(self):
@@ -254,11 +266,11 @@ class Client:
         con.core.ChangeWindowAttributesChecked(self.id, CW.BorderPixel|CW.EventMask, values)
         #con.core.MapWindow(self.id)
 
-    def manage(self):
-        if self.managed:
+    def tile(self):
+        if self.tiled:
             return
 
-        self.managed = True
+        self.tiled = True
         self.__update()
 
     def destroy(self):
@@ -350,7 +362,7 @@ def event_destroy_notify(event):
     client = scr.get_client(event.window)
     if client is not None:
         print "destroy client %d" % event.window
-        if(client.managed):
+        if(client.tiled):
             scr.unmap(client)
         scr.del_client(client)
 
@@ -442,6 +454,9 @@ class Keyboard:
 #
 class Mouse:
     def __init__(self):
+        self.__acting = False
+        self.__s_x = self.__c_x = 0
+        self.__s_y = self.__c_y = 0
         self.__mv_b_mask = eval("EventMask.Button%dMotion" % Mappings.move_button)
         self.__rz_b_mask = eval("EventMask.Button%dMotion" % Mappings.resize_button)
 
@@ -461,18 +476,40 @@ class Mouse:
             return self.resize(event)
 
     def move(self, event):
-        print "move"
+        self.__c_x = event.event_x
+        self.__c_y = event.event_y
+
+        if self.__c_x > self.__s_x:
+            h = "right"
+        elif self.__c_x < self.__s_x:
+            h = "left"
+        else:
+            h = ""
+
+        if self.__c_y > self.__s_y:
+            v = "down"
+        elif self.__c_y < self.__s_y:
+            v = "up"
+        else:
+            v = ""
+
+        print "moving",h,v
+        self.__s_x = event.event_x
+        self.__s_y = event.event_y
 
     def resize(self, event):
-        print "resize"
+        print "resize:",event.__dict__
 
     def press(self, event):
+        if self.__acting:
+            return
         button = event.detail
-        print "press", button
+        self.__acting = True
+        self.__s_x = event.event_x
+        self.__s_y = event.event_y
 
     def release(self, event):
-        button = event.detail
-        print "release", button
+        self.__acting = False
 
 #
 # Main
