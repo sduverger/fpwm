@@ -191,6 +191,9 @@ class Screen:
         self.update()
 
     def map(self, client):
+        if client.tiled:
+            return
+
         client.tile()
         if self.__master is not None:
             self.__slaves.insert(0,self.__master)
@@ -199,6 +202,9 @@ class Screen:
         self.update()
 
     def unmap(self, client):
+        if not client.tiled:
+            return
+
         client.untile()
         if self.__master.id == client.id:
             self.__master = None
@@ -365,6 +371,7 @@ def vanilla_configure_window_request(event):
 
     con.core.ConfigureWindow(event.window, event.value_mask, values)
 
+
 #
 # Events
 #
@@ -391,11 +398,7 @@ def event_destroy_notify(event):
         scr.del_client(client)
 
 def event_map_window(event):
-    scr = current_screen()
-    client = scr.get_client(event.window)
-    if client is not None:
-        scr.map(client)
-
+    tile_client_id(event.window)
     con.core.MapWindow(event.window)
 
 def event_enter_notify(event):
@@ -446,28 +449,19 @@ def event_handler(event):
 #
 # Keyboard & Mouse
 #
-class Mappings:
-    # XXX: Mod2 is always set on KeyEvent (python-xcb or Xephyr bug ?)
-    modifier = KeyButMask.Mod1|KeyButMask.Mod2
-    space = 65
-    move_button = 1
-    resize_button = 3
-
 class Keyboard:
-    def __init__(self):
-        self.__hotkeys = {
-            Mappings.space: lambda: current_screen().next_layout()
-            }
+    def __init__(self, bindings):
+        self.__mods = bindings.modifier
+        self.__shortcuts = bindings.shortcuts
 
     def attach(self):
-        con.core.GrabKey(False, current_client_id(), Mappings.modifier, 0, GrabMode.Async, GrabMode.Async)
+        con.core.GrabKey(False, current_client_id(), self.__mods, 0, GrabMode.Async, GrabMode.Async)
 
     def detach(self):
-        c = current_client()
         con.core.UngrabKey(False, current_client_id(), ModMask.Any)
 
     def action(self, key, mods):
-        act = self.__hotkeys.get(key, None)
+        act = self.__shortcuts.get(key, None)
         if act is not None:
             act()
 
@@ -476,17 +470,18 @@ class Keyboard:
 # however this did not work as expected so we do it our own way
 #
 class Mouse:
-    def __init__(self):
+    def __init__(self, bindings):
         self.__acting = False
         self.__s_x = 0
         self.__s_y = 0
-        self.__mv_b_mask = eval("EventMask.Button%dMotion" % Mappings.move_button)
-        self.__rz_b_mask = eval("EventMask.Button%dMotion" % Mappings.resize_button)
+        self.__mods = bindings.modifier
+        self.__mv_b_mask = eval("EventMask.Button%dMotion" % bindings.move_button)
+        self.__rz_b_mask = eval("EventMask.Button%dMotion" % bindings.resize_button)
 
     def attach(self):
         mask = EventMask.ButtonPress|EventMask.ButtonRelease|EventMask.Button1Motion|EventMask.Button3Motion
         button = 0 #any
-        con.core.GrabButton(False, current_client_id(), mask, GrabMode.Async, GrabMode.Async, 0, 0, button, Mappings.modifier)
+        con.core.GrabButton(False, current_client_id(), mask, GrabMode.Async, GrabMode.Async, 0, 0, button, self.__mods)
 
     def detach(self):
         con.core.UngrabButton(False, current_client_id(), ButtonMask.Any)
@@ -527,13 +522,10 @@ class Mouse:
     def release(self, event):
         self.__acting = False
 
-#
-# Main
-#
-keyboard = Keyboard()
-mouse = Mouse()
-_screens = []
 
+#
+# Services
+#
 def current_screen():
     return _screens[0]
 
@@ -546,6 +538,40 @@ def current_client_id():
     if c is None:
         return current_screen().root
     return c.id
+
+def tile_client_id(id):
+    scr = current_screen()
+    client = scr.get_client(id)
+    if client is not None:
+        scr.map(client)
+
+def tile_client():
+    tile_client_id(current_client_id())
+
+def next_layout():
+    current_screen().next_layout()
+
+#
+# Bindings
+#
+class Bindings:
+    # XXX: Mod2 is always set on KeyEvent (python-xcb or Xephyr bug ?)
+    modifier       = KeyButMask.Mod1|KeyButMask.Mod2
+    next_layout    = 65
+    tile           = 28
+    move_button    = 1
+    resize_button  = 3
+
+Bindings.shortcuts = { Bindings.next_layout :  next_layout,
+                       Bindings.tile        :  tile_client,
+                       }
+
+#
+# Main
+#
+keyboard = Keyboard(Bindings)
+mouse = Mouse(Bindings)
+_screens = []
 
 con = xcb.connect()
 con.core.GrabServer()
