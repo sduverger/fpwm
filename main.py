@@ -229,12 +229,13 @@ class Geometry:
         self.b = b
 
 class Client:
-    def __init__(self, event):
+    def __init__(self, event, screen):
         self.id = event.window
         self.parent = event.parent
         self.geo_real = Geometry(event.x, event.y, event.width, event.height, event.border_width)
         self.geo_want = Geometry(event.x, event.y, event.width, event.height, event.border_width)
         self.border_color = Screen.passive_color
+        self.screen = screen
         self.tiled = False
 
     def focus(self):
@@ -245,14 +246,34 @@ class Client:
         self.border_color = Screen.passive_color
         self.update()
 
-    def move(self, x,y):
-        self.geo_real.x = x
-        self.geo_real.y = y
+    def check_size(self):
+        min_x = 0
+        min_y = 0
+        max_x = self.screen.width
+        max_y = self.screen.height
+
+        if self.geo_real.x < min_x:
+            self.geo_real.x = min_x
+
+        if self.geo_real.y < min_y:
+            self.geo_real.y = min_y
+
+        if self.geo_real.x > max_x:
+            self.geo_real.x = max_x
+
+        if self.geo_real.y > max_y:
+            self.geo_real.y = max_y
+
+    def move(self, dx, dy):
+        self.geo_real.x += dx
+        self.geo_real.y += dy
+        self.check_size()
         self.real_configure_notify()
 
     def resize(self, w,h):
         self.geo_real.w = w
         self.geo_real.h = h
+        self.check_size()
         self.real_configure_notify()
 
     def update(self):
@@ -280,6 +301,7 @@ class Client:
     def real_configure_notify(self):
         mask = ConfigWindow.X|ConfigWindow.Y|ConfigWindow.Width|ConfigWindow.Height|ConfigWindow.BorderWidth
         values = [self.geo_real.x, self.geo_real.y, self.geo_real.w, self.geo_real.h, self.geo_real.b]
+        print "values:",values
         con.core.ConfigureWindow(self.id, mask, values)
 
     def synthetic_configure_notify(self):
@@ -290,6 +312,7 @@ class Client:
         con.core.SendEvent(False, self.id, EventMask.StructureNotify, event)
 
     def moveresize(self):
+        print "client moveresize -----XXXXXX-----"
         if self.geo_want.x != self.geo_real.x:
             self.geo_real.x = self.geo_want.x
 
@@ -356,7 +379,7 @@ def event_configure_window_request(event):
 def event_create_notify(event):
     if event.override_redirect == 0:
         print "new client %d" % event.window
-        current_screen().add_client(Client(event))
+        current_screen().add_client(Client(event, current_screen()))
 
 def event_destroy_notify(event):
     scr = current_screen()
@@ -455,8 +478,8 @@ class Keyboard:
 class Mouse:
     def __init__(self):
         self.__acting = False
-        self.__s_x = self.__c_x = 0
-        self.__s_y = self.__c_y = 0
+        self.__s_x = 0
+        self.__s_y = 0
         self.__mv_b_mask = eval("EventMask.Button%dMotion" % Mappings.move_button)
         self.__rz_b_mask = eval("EventMask.Button%dMotion" % Mappings.resize_button)
 
@@ -476,24 +499,17 @@ class Mouse:
             return self.resize(event)
 
     def move(self, event):
-        self.__c_x = event.event_x
-        self.__c_y = event.event_y
+        c = current_client()
+        if c is None:
+            return
+        if c.tiled:
+            current_screen().unmap(c)
 
-        if self.__c_x > self.__s_x:
-            h = "right"
-        elif self.__c_x < self.__s_x:
-            h = "left"
-        else:
-            h = ""
+        dx = event.event_x - self.__s_x
+        dy = event.event_y - self.__s_y
 
-        if self.__c_y > self.__s_y:
-            v = "down"
-        elif self.__c_y < self.__s_y:
-            v = "up"
-        else:
-            v = ""
+        c.move(dx, dy)
 
-        print "moving",h,v
         self.__s_x = event.event_x
         self.__s_y = event.event_y
 
