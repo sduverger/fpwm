@@ -318,14 +318,17 @@ class Client:
     def untile(self):
         if self.tiled:
             self.tiled = False
+            self.stack_above()
 
     def destroy(self):
         pass
 
+    def stack_above(self):
+        con.core.ConfigureWindow(self.id, ConfigWindow.StackMode, [StackMode.Above])
+
     def real_configure_notify(self):
         mask = ConfigWindow.X|ConfigWindow.Y|ConfigWindow.Width|ConfigWindow.Height|ConfigWindow.BorderWidth
         values = [self.geo_real.x, self.geo_real.y, self.geo_real.w, self.geo_real.h, self.geo_real.b]
-        print "values:",values
         con.core.ConfigureWindow(self.id, mask, values)
 
     def synthetic_configure_notify(self):
