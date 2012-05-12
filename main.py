@@ -252,7 +252,7 @@ class Client:
         self.border_color = Screen.passive_color
         self.update()
 
-    def check_size(self):
+    def check_position(self):
         min_x = 0
         min_y = 0
         max_x = self.screen.width
@@ -270,15 +270,33 @@ class Client:
         if self.geo_real.y > max_y:
             self.geo_real.y = max_y
 
+    def check_size(self):
+        if self.geo_real.w <= 20:
+            self.geo_real.w = 20
+
+        if self.geo_real.h <= 20:
+            self.geo_real.h = 20
+
     def move(self, dx, dy):
         self.geo_real.x += dx
         self.geo_real.y += dy
-        self.check_size()
+        self.check_position()
         self.real_configure_notify()
 
-    def resize(self, w,h):
-        self.geo_real.w = w
-        self.geo_real.h = h
+    def resize(self, up, left, dx, dy):
+        if up and left:
+            self.move(dx, dy)
+            dy = -dy
+            dx = -dx
+        elif up and not left:
+            self.move(0, dy)
+            dy = -dy
+        elif not up and left:
+            self.move(dx, 0)
+            dx = -dx
+
+        self.geo_real.w += dx
+        self.geo_real.h += dy
         self.check_size()
         self.real_configure_notify()
 
@@ -376,6 +394,7 @@ def vanilla_configure_window_request(event):
 # Events
 #
 def event_configure_window_request(event):
+    #XXX: get screen from event root
     scr = current_screen()
     client = scr.get_client(event.window)
     if client is None:
@@ -384,11 +403,13 @@ def event_configure_window_request(event):
         client.configure(event)
 
 def event_create_notify(event):
+    #XXX: get screen from event root
     if event.override_redirect == 0:
         print "new client %d" % event.window
         current_screen().add_client(Client(event, current_screen()))
 
 def event_destroy_notify(event):
+    #XXX: get screen from event root
     scr = current_screen()
     client = scr.get_client(event.window)
     if client is not None:
@@ -398,20 +419,25 @@ def event_destroy_notify(event):
         scr.del_client(client)
 
 def event_map_window(event):
-    tile_client_id(event.window)
-    con.core.MapWindow(event.window)
+    #XXX: get screen from event root
+    scr = current_screen()
+    client = scr.get_client(event.window)
+    if client is not None:
+        tile(client)
+        con.core.MapWindow(event.window)
 
 def event_enter_notify(event):
+    #XXX: get screen from event root
     scr = current_screen()
     client = scr.get_client(event.event)
     if client is not None:
         scr.update_focus(client)
 
 def event_key_press(event):
-    keyboard.action(event.detail, event.state)
+    keyboard.press(event)
 
 def event_key_release(event):
-    print "Release:",event.detail, event.state, event.time
+    keyboard.release(event)
 
 def event_motion_notify(event):
     mouse.motion(event)
@@ -450,77 +476,94 @@ def event_handler(event):
 # Keyboard & Mouse
 #
 class Keyboard:
-    def __init__(self, bindings):
-        self.__mods = bindings.modifier
-        self.__shortcuts = bindings.shortcuts
+    def __init__(self):
+        self.__bindings = {}
 
-    def attach(self):
-        con.core.GrabKey(False, current_client_id(), self.__mods, 0, GrabMode.Async, GrabMode.Async)
+    def attach(self, bindings):
+        for m,k,f in bindings:
+            if m is None:
+                raise ValueError("missing modifier in keyboard bindings")
+
+            if not self.__bindings.has_key(k):
+                self.__bindings[k] = {}
+
+            self.__bindings[k][m] = f
+            con.core.GrabKey(False, current_client_id(), m, k, GrabMode.Async, GrabMode.Async)
 
     def detach(self):
         con.core.UngrabKey(False, current_client_id(), ModMask.Any)
 
-    def action(self, key, mods):
-        act = self.__shortcuts.get(key, None)
-        if act is not None:
-            act()
+    def press(self, event):
+        print "key press:",event.detail, event.state
+        self.__bindings[event.detail][event.state]()
 
-#
-# We thought we can update mask to prevent other button press/release while move/resize
-# however this did not work as expected so we do it our own way
-#
+    def release(self, event):
+        print "key release:",event.detail, event.state
+
 class Mouse:
-    def __init__(self, bindings):
-        self.__acting = False
-        self.__s_x = 0
-        self.__s_y = 0
-        self.__mods = bindings.modifier
-        self.__mv_b_mask = eval("EventMask.Button%dMotion" % bindings.move_button)
-        self.__rz_b_mask = eval("EventMask.Button%dMotion" % bindings.resize_button)
+    def __init__(self):
+        self.__acting = None
+        self.__x = 0
+        self.__y = 0
+        self.__up = False
+        self.__left = False
+        self.__bindings = {}
 
-    def attach(self):
-        mask = EventMask.ButtonPress|EventMask.ButtonRelease|EventMask.Button1Motion|EventMask.Button3Motion
-        button = 0 #any
-        con.core.GrabButton(False, current_client_id(), mask, GrabMode.Async, GrabMode.Async, 0, 0, button, self.__mods)
+    def attach(self, bindings):
+        for m,b,f in bindings:
+            if m is None:
+                raise ValueError("missing modifier in mouse bindings")
+
+            if not self.__bindings.has_key(b):
+                self.__bindings[b] = {}
+
+            self.__bindings[b][m] = f
+
+            bmask = eval("EventMask.Button%dMotion" % b)
+            emask = EventMask.ButtonPress|EventMask.ButtonRelease|bmask
+            con.core.GrabButton(False, current_client_id(), emask, GrabMode.Async, GrabMode.Async, 0, 0, b, m)
 
     def detach(self):
         con.core.UngrabButton(False, current_client_id(), ButtonMask.Any)
 
     def motion(self, event):
-        # several buttons may be selected, however move is higher priority for us
-        if event.state & self.__mv_b_mask:
-            return self.move(event)
-        elif event.state & self.__rz_b_mask:
-            return self.resize(event)
+        if self.__acting is None:
+            return
 
-    def move(self, event):
+        dx = event.event_x - self.__x
+        dy = event.event_y - self.__y
+
+        self.__acting(self.__up, self.__left, dx, dy)
+
+        self.__x = event.event_x
+        self.__y = event.event_y
+
+    def press(self, event):
+        print "button press:",event.__dict__
+        if self.__acting is not None:
+            return
+
         c = current_client()
         if c is None:
             return
-        if c.tiled:
-            current_screen().unmap(c)
 
-        dx = event.event_x - self.__s_x
-        dy = event.event_y - self.__s_y
+        self.__acting = self.__bindings[event.detail][event.state]
+        self.__x = event.event_x
+        self.__y = event.event_y
 
-        c.move(dx, dy)
+        if self.__x < c.geo_real.x+(2*c.geo_real.b+c.geo_real.w)/2:
+            self.__left = True
+        else:
+            self.__left = False
 
-        self.__s_x = event.event_x
-        self.__s_y = event.event_y
-
-    def resize(self, event):
-        print "resize:",event.__dict__
-
-    def press(self, event):
-        if self.__acting:
-            return
-        button = event.detail
-        self.__acting = True
-        self.__s_x = event.event_x
-        self.__s_y = event.event_y
+        if self.__y < c.geo_real.y+(2*c.geo_real.b+c.geo_real.h)/2:
+            self.__up = True
+        else:
+            self.__up = False
 
     def release(self, event):
-        self.__acting = False
+        print "button release:",event.__dict__
+        self.__acting = None
 
 
 #
@@ -528,6 +571,9 @@ class Mouse:
 #
 def current_screen():
     return _screens[0]
+
+def next_layout():
+    current_screen().next_layout()
 
 def current_client():
     # may be None (no client)
@@ -539,38 +585,54 @@ def current_client_id():
         return current_screen().root
     return c.id
 
-def tile_client_id(id):
-    scr = current_screen()
-    client = scr.get_client(id)
-    if client is not None:
-        scr.map(client)
+def tile(c):
+    if c is not None and not c.tiled:
+        c.screen.map(c)
+
+def untile(c):
+    if c is not None and c.tiled:
+        c.screen.unmap(c)
 
 def tile_client():
-    tile_client_id(current_client_id())
+    tile(current_client())
 
-def next_layout():
-    current_screen().next_layout()
+def untile_client():
+    untile(current_client())
+
+def move_client(up, left, dx, dy):
+    c = current_client()
+    if c is not None:
+        untile(c)
+        c.move(dx, dy)
+
+def resize_client(up, left, dx, dy):
+    c = current_client()
+    if c is not None:
+        untile(c)
+        c.resize(up, left, dx, dy)
 
 #
 # Bindings
 #
-class Bindings:
-    # XXX: Mod2 is always set on KeyEvent (python-xcb or Xephyr bug ?)
-    modifier       = KeyButMask.Mod1|KeyButMask.Mod2
-    next_layout    = 65
-    tile           = 28
-    move_button    = 1
-    resize_button  = 3
+class KeyMap:
+    space          = 65
+    t              = 28
 
-Bindings.shortcuts = { Bindings.next_layout :  next_layout,
-                       Bindings.tile        :  tile_client,
-                       }
+# XXX: KeyButMask.Mod2 is always set (xpyb/Xephyr bug ?)
+keyboard_bindings = [ (KeyButMask.Mod2|KeyButMask.Mod1,                    KeyMap.space,    next_layout),
+                      (KeyButMask.Mod2|KeyButMask.Mod1,                    KeyMap.t,        tile_client),
+                      ]
+
+mouse_bindings    = [ (KeyButMask.Mod2|KeyButMask.Mod1,                    1,               move_client),
+                      (KeyButMask.Mod2|KeyButMask.Mod1,                    3,               resize_client),
+                      ]
+
 
 #
 # Main
 #
-keyboard = Keyboard(Bindings)
-mouse = Mouse(Bindings)
+keyboard = Keyboard()
+mouse = Mouse()
 _screens = []
 
 con = xcb.connect()
@@ -602,8 +664,8 @@ except BadAccess, e:
 
 con.core.UngrabServer()
 con.flush()
-keyboard.attach()
-mouse.attach()
+keyboard.attach(keyboard_bindings)
+mouse.attach(mouse_bindings)
 
 while True:
     try:
