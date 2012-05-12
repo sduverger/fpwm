@@ -460,7 +460,7 @@ def event_handler(event):
         hdl(event)
 
 #
-# Keyboard & Mouse
+# Keyboard
 #
 class Keyboard:
     def __init__(self):
@@ -487,9 +487,13 @@ class Keyboard:
     def release(self, event):
         print "key release:",event.detail, event.state
 
+#
+# Mouse
+#
 class Mouse:
     def __init__(self):
         self.__acting = None
+        self.__c = None
         self.__x = 0
         self.__y = 0
         self.__up = False
@@ -520,30 +524,30 @@ class Mouse:
         dx = event.event_x - self.__x
         dy = event.event_y - self.__y
 
-        self.__acting(self.__up, self.__left, dx, dy)
+        self.__acting(self.__c, self.__up, self.__left, dx, dy)
 
         self.__x = event.event_x
         self.__y = event.event_y
 
     def press(self, event):
         print "button press:",event.__dict__
-        if self.__acting is not None:
+        if self.__acting is not None or event.child == 0:
             return
 
-        c = current_client()
-        if c is None:
+        self.__c = current_screen().get_client(event.child)
+        if self.__c is None:
             return
 
         self.__acting = self.__bindings[event.detail][event.state]
         self.__x = event.event_x
         self.__y = event.event_y
 
-        if self.__x < c.geo_real.x+(2*c.geo_real.b+c.geo_real.w)/2:
+        if self.__x < self.__c.geo_real.x+(2*self.__c.geo_real.b+self.__c.geo_real.w)/2:
             self.__left = True
         else:
             self.__left = False
 
-        if self.__y < c.geo_real.y+(2*c.geo_real.b+c.geo_real.h)/2:
+        if self.__y < self.__c.geo_real.y+(2*self.__c.geo_real.b+self.__c.geo_real.h)/2:
             self.__up = True
         else:
             self.__up = False
@@ -586,14 +590,12 @@ def tile_client():
 def untile_client():
     untile(current_client())
 
-def move_client(up, left, dx, dy):
-    c = current_client()
+def move_client(c, up, left, dx, dy):
     if c is not None:
         untile(c)
         c.move(dx, dy)
 
-def resize_client(up, left, dx, dy):
-    c = current_client()
+def resize_client(c, up, left, dx, dy):
     if c is not None:
         untile(c)
         c.resize(up, left, dx, dy)
