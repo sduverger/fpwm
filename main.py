@@ -190,7 +190,7 @@ class Screen:
         self.current_layout = (self.current_layout+1)%len(self.__layouts)
         self.update()
 
-    def map(self, client):
+    def tile(self, client):
         if client.tiled:
             return
 
@@ -201,7 +201,7 @@ class Screen:
         self.__master = client
         self.update()
 
-    def unmap(self, client):
+    def untile(self, client):
         if not client.tiled:
             return
 
@@ -418,7 +418,7 @@ def event_destroy_notify(event):
     if client is not None:
         print "destroy client %d" % event.window
         if(client.tiled):
-            scr.unmap(client)
+            scr.untile(client)
         scr.del_client(client)
 
 def event_map_window(event):
@@ -590,11 +590,11 @@ def current_client_id():
 
 def tile(c):
     if c is not None and not c.tiled:
-        c.screen.map(c)
+        c.screen.tile(c)
 
 def untile(c):
     if c is not None and c.tiled:
-        c.screen.unmap(c)
+        c.screen.untile(c)
 
 def tile_client():
     tile(current_client())
