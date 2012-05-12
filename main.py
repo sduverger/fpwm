@@ -252,24 +252,6 @@ class Client:
         self.border_color = Screen.passive_color
         self.update()
 
-    def check_position(self):
-        min_x = 0
-        min_y = 0
-        max_x = self.screen.width
-        max_y = self.screen.height
-
-        if self.geo_real.x < min_x:
-            self.geo_real.x = min_x
-
-        if self.geo_real.y < min_y:
-            self.geo_real.y = min_y
-
-        if self.geo_real.x > max_x:
-            self.geo_real.x = max_x
-
-        if self.geo_real.y > max_y:
-            self.geo_real.y = max_y
-
     def check_size(self):
         if self.geo_real.w <= 20:
             self.geo_real.w = 20
@@ -280,7 +262,6 @@ class Client:
     def move(self, dx, dy):
         self.geo_real.x += dx
         self.geo_real.y += dy
-        self.check_position()
         self.real_configure_notify()
 
     def resize(self, up, left, dx, dy):
@@ -328,8 +309,11 @@ class Client:
 
     def real_configure_notify(self):
         mask = ConfigWindow.X|ConfigWindow.Y|ConfigWindow.Width|ConfigWindow.Height|ConfigWindow.BorderWidth
-        values = [self.geo_real.x, self.geo_real.y, self.geo_real.w, self.geo_real.h, self.geo_real.b]
-        con.core.ConfigureWindow(self.id, mask, values)
+        pkt = pack('=xx2xIH2xiiIII',
+                   self.id, mask,
+                   self.geo_real.x, self.geo_real.y,
+                   self.geo_real.w, self.geo_real.h, self.geo_real.b)
+        con.core.send_request(xcb.Request(pkt, 12, True, False), xcb.VoidCookie())
 
     def synthetic_configure_notify(self):
         # cf. xcb/xproto.h
