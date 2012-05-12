@@ -656,6 +656,10 @@ def toggle_show_desktop():
 #     for c in next_workspace().all_clients().itervalues():
 #         c.reparent(next_workspace().screen.root)
 
+def spawn(*args):
+    print "spawn",args
+    os.spawnle(os.P_NOWAIT, args[0], *args)
+
 #
 # Bindings
 #
@@ -663,16 +667,27 @@ class KeyMap:
     space          = 65
     t              = 28
     d              = 40
-
+    s              = 39
+    n1             = 10
+    n2             = 11
+    n3             = 12
+    n4             = 13
+    n5             = 14
+    n6             = 15
+    n7             = 16
+    n8             = 17
+    n9             = 18
+    n0             = 19
 
 # XXX: KeyButMask.Mod2 is always set (xpyb/Xephyr bug ?)
-keyboard_bindings = [ (KeyButMask.Mod2|KeyButMask.Mod1,                    KeyMap.space,    next_layout),
-                      (KeyButMask.Mod2|KeyButMask.Mod1,                    KeyMap.t,        tile_client),
-                      (KeyButMask.Mod2|KeyButMask.Mod1,                    KeyMap.d,        toggle_show_desktop),
+keyboard_bindings = [ (KeyButMask.Mod2|KeyButMask.Mod1, KeyMap.space, next_layout),
+                      (KeyButMask.Mod2|KeyButMask.Mod1, KeyMap.t,     tile_client),
+                      (KeyButMask.Mod2|KeyButMask.Mod1, KeyMap.d,     toggle_show_desktop),
+                      (KeyButMask.Mod2|KeyButMask.Mod1, KeyMap.s, lambda:spawn("/usr/bin/xterm","-bg","lightblue",{"DISPLAY":":1"})),
                       ]
 
-mouse_bindings    = [ (KeyButMask.Mod2|KeyButMask.Mod1,                    1,               move_client),
-                      (KeyButMask.Mod2|KeyButMask.Mod1,                    3,               resize_client),
+mouse_bindings    = [ (KeyButMask.Mod2|KeyButMask.Mod1, 1, move_client),
+                      (KeyButMask.Mod2|KeyButMask.Mod1, 3, resize_client),
                       ]
 
 
@@ -685,6 +700,13 @@ mouse_bindings    = [ (KeyButMask.Mod2|KeyButMask.Mod1,                    1,   
 # - create _NET_VIRTUAL_ROOTS list
 # - reparent createdWin to current workspace vroot
 # - manage xrandr
+#
+# BUGS:
+#
+# - firefox popups goes away when then mouse enters
+# - grabs are active only after one client as been created.
+#   When no more clients are living, grabs still work. WTF!
+# - Mod.ctrl is always set under "my" Xephyr/python-xcb
 #
 keyboard = Keyboard()
 mouse = Mouse()
