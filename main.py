@@ -614,16 +614,28 @@ def resize_client(up, left, dx, dy):
         untile(c)
         c.resize(up, left, dx, dy)
 
+desktop_toggle = False
+def toggle_show_desktop():
+    global desktop_toggle
+    if not desktop_toggle:
+        con.core.UnmapSubwindows(current_screen().root)
+        desktop_toggle = True
+    else:
+        con.core.MapSubwindows(current_screen().root)
+        desktop_toggle = False
 #
 # Bindings
 #
 class KeyMap:
     space          = 65
     t              = 28
+    d              = 40
+
 
 # XXX: KeyButMask.Mod2 is always set (xpyb/Xephyr bug ?)
 keyboard_bindings = [ (KeyButMask.Mod2|KeyButMask.Mod1,                    KeyMap.space,    next_layout),
                       (KeyButMask.Mod2|KeyButMask.Mod1,                    KeyMap.t,        tile_client),
+                      (KeyButMask.Mod2|KeyButMask.Mod1,                    KeyMap.d,        toggle_show_desktop),
                       ]
 
 mouse_bindings    = [ (KeyButMask.Mod2|KeyButMask.Mod1,                    1,               move_client),
