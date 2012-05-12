@@ -167,6 +167,9 @@ class Screen:
         ChangeProperty(con.core, PropMode.Replace, self.vroot, atoms["_NET_WM_NAME"], Atom.STRING, 8, len(wmname), wmname)
         ChangeProperty(con.core, PropMode.Replace, self.vroot, atoms["_NET_WM_PID"], Atom.CARDINAL, 32, 1, os.getpid())
 
+    def all_clients(self):
+        return self.__clients
+
     def add_client(self, client):
         self.__clients[client.id] = client
 
@@ -243,6 +246,12 @@ class Client:
         self.border_color = Screen.passive_color
         self.screen = screen
         self.tiled = False
+        self.__min_w = 20
+        self.__min_h = 20
+
+    def reparent(self, who):
+        self.parent = who
+        con.core.ReparentWindow(self.id, self.parent, self.geo_real.x, self.geo_real.y)
 
     def focus(self):
         self.border_color = Screen.focused_color
@@ -252,13 +261,6 @@ class Client:
         self.border_color = Screen.passive_color
         self.update()
 
-    def check_size(self):
-        if self.geo_real.w <= 20:
-            self.geo_real.w = 20
-
-        if self.geo_real.h <= 20:
-            self.geo_real.h = 20
-
     def move(self, dx, dy):
         self.geo_real.x += dx
         self.geo_real.y += dy
@@ -266,19 +268,44 @@ class Client:
 
     def resize(self, up, left, dx, dy):
         if up and left:
-            self.move(dx, dy)
+            mx = dx
+            my = dy
             dy = -dy
             dx = -dx
         elif up and not left:
-            self.move(0, dy)
+            mx = 0
+            my = dy
             dy = -dy
         elif not up and left:
-            self.move(dx, 0)
+            mx = dx
+            my = 0
             dx = -dx
+        else:
+            mx = 0
+            my = 0
+
+        if self.geo_real.w < self.__min_w:
+            self.geo_real.w = self.__min_w
+
+        if self.geo_real.w == self.__min_w and dx < 0:
+            dx = 0
+            mx = 0
+
+        if self.geo_real.h < self.__min_h:
+            self.geo_real.h = self.__min_h
+
+        if self.geo_real.h == self.__min_h and dy < 0:
+            dy = 0
+            my = 0
+
+        if dx == 0 and dy == 0:
+            return
+
+        if mx != 0 or my != 0:
+            self.move(mx, my)
 
         self.geo_real.w += dx
         self.geo_real.h += dy
-        self.check_size()
         self.real_configure_notify()
 
     def update(self):
@@ -420,6 +447,17 @@ def event_enter_notify(event):
     if client is not None:
         scr.update_focus(client)
 
+def event_reparent_notify(event):
+    pass
+    #XXX: get screen from event root
+    # scr = current_screen()
+    # client = scr.get_client(event.window)
+    # evt = pack("=B3xIIIHH3x",
+    #            21, event.event, event.window, event.parent,
+    #            client.geo_real.x, client.geo_real.y)
+    # con.core.SendEvent(False, event.window, EventMask.StructureNotify, evt)
+
+
 def event_key_press(event):
     keyboard.press(event)
 
@@ -444,6 +482,7 @@ event_handlers = { CreateNotifyEvent:event_create_notify,
                    ConfigureRequestEvent:event_configure_window_request,
                    MapRequestEvent:event_map_window,
                    EnterNotifyEvent:event_enter_notify,
+                   ReparentNotifyEvent:event_reparent_notify,
                    KeyPressEvent:event_key_press,
                    KeyReleaseEvent:event_key_release,
                    MotionNotifyEvent:event_motion_notify,
@@ -609,6 +648,14 @@ def toggle_show_desktop():
     else:
         con.core.MapSubwindows(current_screen().root)
         desktop_toggle = False
+
+# change workspace
+# def change_workspace():
+#     for c in current_workspace().all_clients().itervalues():
+#         c.reparent(workspace.id)
+#     for c in next_workspace().all_clients().itervalues():
+#         c.reparent(next_workspace().screen.root)
+
 #
 # Bindings
 #
@@ -631,6 +678,13 @@ mouse_bindings    = [ (KeyButMask.Mod2|KeyButMask.Mod1,                    1,   
 
 #
 # Main
+#
+# TODO:
+#
+# - create workspaces and their vroot
+# - create _NET_VIRTUAL_ROOTS list
+# - reparent createdWin to current workspace vroot
+# - manage xrandr
 #
 keyboard = Keyboard()
 mouse = Mouse()
