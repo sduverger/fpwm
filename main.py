@@ -110,9 +110,7 @@ class LayoutTall:
     def update(self, master, slaves):
         if master == None:
             return
-        do_slaves = self.__master_mapper(master, slaves)
-        master.real_configure_notify()
-        if do_slaves:
+        if self.__master_mapper(master, slaves):
             self.__slaves_mapper(slaves)
 
 class LayoutVTall(LayoutTall):
@@ -127,10 +125,13 @@ class LayoutVTall(LayoutTall):
 
         if len(slaves) == 0:
             master.geo_real.w = self.workspace.screen.width - 2*master.geo_real.b
-            return False
+            do_slaves = False
+        else:
+            master.geo_real.w = self.workspace.screen.width/2 - 2*master.geo_real.b
+            do_slaves = True
 
-        master.geo_real.w = self.workspace.screen.width/2 - 2*master.geo_real.b
-        return True
+        master.real_configure_notify()
+        return do_slaves
 
     def __map_slaves(self, slaves):
         L = len(slaves)
@@ -156,10 +157,13 @@ class LayoutHTall(LayoutTall):
 
         if len(slaves) == 0:
             master.geo_real.h = self.workspace.screen.height - 2*master.geo_real.b
-            return False
+            do_slaves = False
+        else:
+            master.geo_real.h = self.workspace.screen.height/2 - 2*master.geo_real.b
+            do_slaves = True
 
-        master.geo_real.h = self.workspace.screen.height/2 - 2*master.geo_real.b
-        return True
+        master.real_configure_notify()
+        return do_slaves
 
     def __map_slaves(self, slaves):
         L = len(slaves)
@@ -208,10 +212,12 @@ class Workspace:
         if self.__master != None:
             self.__layouts[self.current_layout].update(self.__master, self.__slaves)
 
-    def tile(self, client):
-        if client.tiled:
-            return
+    def map(self, client):
+        if client.never_tiled:
+            self.__tile(client)
+        client.map()
 
+    def __tile(self, client):
         client.tile()
         if self.__master is not None:
             self.__slaves.insert(0,self.__master)
@@ -219,10 +225,7 @@ class Workspace:
         self.__master = client
         self.update()
 
-    def untile(self, client):
-        if not client.tiled:
-            return
-
+    def __untile(self, client):
         client.untile()
         if self.__master.id == client.id:
             self.__master = None
@@ -233,6 +236,16 @@ class Workspace:
             self.__slaves.remove(client)
 
         self.update()
+
+    def untile(self, client):
+        if not client.tiled:
+            return
+        self.__untile(client)
+
+    def tile(self, client):
+        if client.tiled:
+            return
+        self.__tile(client)
 
     def update_focus(self, client):
         if self.focused_client is not None:
@@ -291,20 +304,14 @@ class Client:
         self.border_color = Screen.passive_color
         self.workspace = workspace
         self.tiled = False
+        self.never_tiled = True
         self.__min_w = 20
         self.__min_h = 20
+        self.__setup()
 
-    def reparent(self, who):
-        self.parent = who
-        con.core.ReparentWindow(self.id, self.parent, self.geo_real.x, self.geo_real.y)
-
-    def focus(self):
-        self.border_color = Screen.focused_color
-        self.update()
-
-    def unfocus(self):
-        self.border_color = Screen.passive_color
-        self.update()
+    def __setup(self):
+        mask  = EventMask.EnterWindow|EventMask.PropertyChange|EventMask.FocusChange
+        con.core.ChangeWindowAttributes(self.id, CW.EventMask, [mask])
 
     def move(self, dx, dy):
         self.geo_real.x += dx
@@ -353,25 +360,35 @@ class Client:
         self.geo_real.h += dy
         self.real_configure_notify()
 
-    def update(self):
-        if self.tiled:
-            self.__update()
+    def reparent(self, who):
+        self.parent = who
+        con.core.ReparentWindow(self.id, self.parent, self.geo_real.x, self.geo_real.y)
 
-    def __update(self):
-        mask  = EventMask.EnterWindow|EventMask.PropertyChange|EventMask.FocusChange
-        values = [self.border_color, mask]
-        con.core.ChangeWindowAttributesChecked(self.id, CW.BorderPixel|CW.EventMask, values)
-        #con.core.MapWindow(self.id)
+    def focus(self):
+        #con.core.SetInputFocus(InputFocus.PointerRoot, self.id, InputFocus._None)
+        self.border_color = Screen.focused_color
+        self.update_border_color()
+
+    def unfocus(self):
+        self.border_color = Screen.passive_color
+        self.update_border_color()
+
+    def update_border_color(self):
+        con.core.ChangeWindowAttributes(self.id, CW.BorderPixel, [self.border_color])
+
+    def map(self):
+        con.core.MapWindow(self.id)
 
     def tile(self):
-        if not self.tiled:
+        if self.never_tiled:
+            self.never_tiled = False
             self.tiled = True
-            self.__update()
+        elif not self.tiled:
+            self.tiled = True
 
     def untile(self):
         if self.tiled:
             self.tiled = False
-            self.stack_above()
 
     def destroy(self):
         pass
@@ -381,21 +398,18 @@ class Client:
 
     def real_configure_notify(self):
         mask = ConfigWindow.X|ConfigWindow.Y|ConfigWindow.Width|ConfigWindow.Height|ConfigWindow.BorderWidth
-        pkt = pack('=xx2xIH2xiiIII',
-                   self.id, mask,
+        pkt = pack('=xx2xIH2xiiIII', self.id, mask,
                    self.geo_real.x, self.geo_real.y,
                    self.geo_real.w, self.geo_real.h, self.geo_real.b)
         con.core.send_request(xcb.Request(pkt, 12, True, False), xcb.VoidCookie())
 
     def synthetic_configure_notify(self):
-        # cf. xcb/xproto.h
-        event = pack("=B3xIIIHHHHHBx",
-                     22, self.id, self.id, 0,
-                     self.geo_want.x, self.geo_want.y, self.geo_want.w, self.geo_want.h, self.geo_want.b,0)
+        event = pack("=B3xIIIHHHHHBx", 22, self.id, self.id, 0,
+                     self.geo_want.x, self.geo_want.y,
+                     self.geo_want.w, self.geo_want.h, self.geo_want.b, 0)
         con.core.SendEvent(False, self.id, EventMask.StructureNotify, event)
 
     def moveresize(self):
-        print "client moveresize -----XXXXXX-----"
         if self.geo_want.x != self.geo_real.x:
             self.geo_real.x = self.geo_want.x
 
@@ -411,8 +425,6 @@ class Client:
         self.real_configure_notify()
 
     def configure(self, event):
-        print "configuring client %d" % self.id
-
         if event.value_mask & ConfigWindow.X:
             self.geo_want.x = event.x
         if event.value_mask & ConfigWindow.Y:
@@ -424,7 +436,7 @@ class Client:
         if event.value_mask & ConfigWindow.BorderWidth:
             self.geo_want.b = event.border_width
 
-        if event.value_mask & (ConfigWindow.X|ConfigWindow.Y|ConfigWindow.Width|ConfigWindow.Height):
+        if not self.tiled and event.value_mask & (ConfigWindow.X|ConfigWindow.Y|ConfigWindow.Width|ConfigWindow.Height):
             return self.moveresize()
 
         return self.synthetic_configure_notify()
@@ -479,8 +491,7 @@ def event_map_window(event):
     wk = current_workspace()
     cl = wk.get_client(event.window)
     if cl is not None:
-        tile(cl)
-        con.core.MapWindow(event.window)
+        wk.map(cl)
 
 def event_enter_notify(event):
     wk = current_workspace()
@@ -615,6 +626,8 @@ class Mouse:
         self.__c = current_workspace().get_client(event.child)
         if self.__c is None:
             return
+
+        self.__c.stack_above()
 
         self.__acting = self.__bindings[event.detail][event.state]
         self.__x = event.event_x
@@ -765,7 +778,7 @@ keyboard_bindings = [ (KeyButMask.Mod2|KeyButMask.Mod1, KeyMap.space, next_layou
                       (KeyButMask.Mod2|KeyButMask.Mod1, KeyMap.d,     toggle_show_desktop),
                       (KeyButMask.Mod2|KeyButMask.Mod1, KeyMap.right, next_workspace),
                       (KeyButMask.Mod2|KeyButMask.Mod1, KeyMap.left,  prev_workspace),
-                      (KeyButMask.Mod2|KeyButMask.Mod1, KeyMap.s, lambda:spawn("/usr/bin/xterm","-bg","lightblue",{"DISPLAY":":1"})),
+                      (KeyButMask.Mod2|KeyButMask.Mod1, KeyMap.s, lambda:spawn("/usr/bin/xterm","-bg","lightgreen",{"DISPLAY":":1"})),
                       ]
 
 mouse_bindings    = [ (KeyButMask.Mod2|KeyButMask.Mod1, 1, move_client),
