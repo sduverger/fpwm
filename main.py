@@ -2,8 +2,8 @@
 
 import sys, os
 import xcb
-from xcb.xproto import *
-from xcb.randr  import *
+from   xcb.xproto import *
+import xcb.randr
 
 wmname = "fpwm"
 
@@ -410,17 +410,18 @@ class Client:
         con.core.SendEvent(False, self.id, EventMask.StructureNotify, event)
 
     def moveresize(self):
-        if self.geo_want.x != self.geo_real.x:
-            self.geo_real.x = self.geo_want.x
+        if not self.tiled:
+            if self.geo_want.x != self.geo_real.x:
+                self.geo_real.x = self.geo_want.x
 
-        if self.geo_want.y != self.geo_real.y:
-            self.geo_real.y = self.geo_want.y
+            if self.geo_want.y != self.geo_real.y:
+                self.geo_real.y = self.geo_want.y
 
-        if self.geo_want.w != self.geo_real.w:
-            self.geo_real.w = self.geo_want.w
+            if self.geo_want.w != self.geo_real.w:
+                self.geo_real.w = self.geo_want.w
 
-        if self.geo_want.h != self.geo_real.h:
-            self.geo_real.h = self.geo_want.h
+            if self.geo_want.h != self.geo_real.h:
+                self.geo_real.h = self.geo_want.h
 
         self.real_configure_notify()
 
@@ -499,8 +500,7 @@ def event_enter_notify(event):
     if cl is not None:
         wk.update_focus(cl)
 
-def event_reparent_notify(event):
-    pass
+# def event_reparent_notify(event):
     # wk = current_workspace()
     # cl = scr.get_client(event.window)
     # evt = pack("=B3xIIIHH3x",
@@ -532,7 +532,6 @@ event_handlers = { CreateNotifyEvent:event_create_notify,
                    ConfigureRequestEvent:event_configure_window_request,
                    MapRequestEvent:event_map_window,
                    EnterNotifyEvent:event_enter_notify,
-                   ReparentNotifyEvent:event_reparent_notify,
                    KeyPressEvent:event_key_press,
                    KeyReleaseEvent:event_key_release,
                    MotionNotifyEvent:event_motion_notify,
@@ -623,7 +622,8 @@ class Mouse:
         if self.__acting is not None or event.child == 0:
             return
 
-        self.__c = current_workspace().get_client(event.child)
+        wk = current_workspace()
+        self.__c = wk.get_client(event.child)
         if self.__c is None:
             return
 
@@ -825,9 +825,10 @@ _screens = []
 _workspaces = []
 
 con = xcb.connect()
-con.core.GrabServer()
-
 setup = con.get_setup()
+xrandr = con(xcb.randr.key)
+
+con.core.GrabServer()
 
 atoms = {}
 for n in atom_names:
