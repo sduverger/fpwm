@@ -770,21 +770,35 @@ class KeyMap:
     n9             = 18
     n0             = 19
 
+    mod_shift      = KeyButMask.Shift
+    mod_ctrl       = KeyButMask.Control
+    mod_alt        = KeyButMask.Mod1
+    mod_win        = KeyButMask.Mod4
+    mod_altgr      = KeyButMask.Mod5
+
 workspaces = [ "1", "2", "3", "4" ]
 
+keyboard_bindings = [ (KeyMap.mod_alt, KeyMap.space, next_layout),
+                      (KeyMap.mod_alt, KeyMap.t,     tile_client),
+                      (KeyMap.mod_alt, KeyMap.d,     toggle_show_desktop),
+                      (KeyMap.mod_alt, KeyMap.right, next_workspace),
+                      (KeyMap.mod_alt, KeyMap.left,  prev_workspace),
+                      (KeyMap.mod_alt, KeyMap.s,     lambda:spawn("/usr/bin/xterm","-bg","lightgreen",{"DISPLAY":":1"})),
+                      ]
+
+mouse_bindings    = [ (KeyMap.mod_alt, 1, move_client),
+                      (KeyMap.mod_alt, 3, resize_client),
+                      ]
+
+
 # XXX: KeyButMask.Mod2 is always set (xpyb/Xephyr bug ?)
-keyboard_bindings = [ (KeyButMask.Mod2|KeyButMask.Mod1, KeyMap.space, next_layout),
-                      (KeyButMask.Mod2|KeyButMask.Mod1, KeyMap.t,     tile_client),
-                      (KeyButMask.Mod2|KeyButMask.Mod1, KeyMap.d,     toggle_show_desktop),
-                      (KeyButMask.Mod2|KeyButMask.Mod1, KeyMap.right, next_workspace),
-                      (KeyButMask.Mod2|KeyButMask.Mod1, KeyMap.left,  prev_workspace),
-                      (KeyButMask.Mod2|KeyButMask.Mod1, KeyMap.s, lambda:spawn("/usr/bin/xterm","-bg","lightgreen",{"DISPLAY":":1"})),
-                      ]
+def xhephyr_wtf(k, m):
+    for n in range(len(k)):
+        k[n] = (k[n][0]|KeyButMask.Mod2, k[n][1], k[n][2])
+    for n in range(len(m)):
+        m[n] = (m[n][0]|KeyButMask.Mod2, m[n][1], m[n][2])
 
-mouse_bindings    = [ (KeyButMask.Mod2|KeyButMask.Mod1, 1, move_client),
-                      (KeyButMask.Mod2|KeyButMask.Mod1, 3, resize_client),
-                      ]
-
+xhephyr_wtf(keyboard_bindings, mouse_bindings)
 
 #
 # Main
