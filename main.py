@@ -1,9 +1,9 @@
 #!/usr/bin/env python
 
 import sys, os
-
 import xcb
 from xcb.xproto import *
+from xcb.randr  import *
 
 wmname = "fpwm"
 
@@ -742,12 +742,19 @@ def next_workspace():
 
 def prev_workspace():
     nwk = prev_workspace_from(current_workspace())
-    if nwk is not None: 
+    if nwk is not None:
         current_screen().set_workspace(nwk)
 
 def spawn(*args):
     print "spawn",args
-    os.spawnle(os.P_NOWAIT, args[0], *args)
+    child = os.fork()
+    if child != 0:
+        os.waitpid(child, 0)
+        return
+    if os.fork() != 0:
+        os._exit(0)
+    os.setsid()
+    os.execle(args[0], *args)
 
 #
 # Bindings
@@ -792,13 +799,12 @@ mouse_bindings    = [ (KeyMap.mod_alt, 1, move_client),
 
 
 # XXX: KeyButMask.Mod2 is always set (xpyb/Xephyr bug ?)
-def xhephyr_wtf(k, m):
-    for n in range(len(k)):
-        k[n] = (k[n][0]|KeyButMask.Mod2, k[n][1], k[n][2])
-    for n in range(len(m)):
-        m[n] = (m[n][0]|KeyButMask.Mod2, m[n][1], m[n][2])
+def xhephyr_fix(x):
+    for n in range(len(x)):
+        x[n] = (x[n][0]|KeyButMask.Mod2, x[n][1], x[n][2])
 
-xhephyr_wtf(keyboard_bindings, mouse_bindings)
+xhephyr_fix(keyboard_bindings)
+xhephyr_fix(mouse_bindings)
 
 #
 # Main
