@@ -347,17 +347,17 @@ class Geometry:
         self.b = b
 
 class Client:
-    def __init__(self, x,y, w,h, b, workspace):
+    def __init__(self, event, workspace):
         self.id = event.window
         self.parent = event.parent
-        self.geo_virt = Geometry(x,y,w,h,b)
-        self.geo_want = Geometry(x,y,w,h,b)
+        self.__min_w = 20
+        self.__min_h = 20
+        self.geo_virt = Geometry(0,0, self.__min_w, self.__min_w, 1)
+        self.geo_want = Geometry(0,0, self.__min_w, self.__min_w, 1)
         self.border_color = Screen.passive_color
         self.workspace = workspace
         self.tiled = False
         self.never_tiled = True
-        self.__min_w = 20
-        self.__min_h = 20
         self.__setup()
 
     def __setup(self):
@@ -557,7 +557,7 @@ def event_map_window(event):
     wk = current_workspace()
     cl = wk.get_client(event.window)
     if cl is None:
-        cl = Client(0,0,0,0,1, wk)
+        cl = Client(event, wk)
         wk.add(cl)
     wk.map(cl)
 
