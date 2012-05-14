@@ -67,7 +67,8 @@ def ChangeProperty(core, mode, window, property, type, format, data_len, data):
 # Screen
 #
 class Screen:
-    focused_color = 0x94bff3
+    #focused_color = 0x94bff3
+    focused_color = 0xff0000
     passive_color = 0x505050
 
     def __init__(self, viewport, x, y, w, h, workspaces):
@@ -190,6 +191,7 @@ class Workspace:
         self.__clients = {}
         self.__master = None
         self.__slaves = []
+        self.__floating = []
         self.__layouts = [LayoutVTall(self), LayoutHTall(self)]
         self.current_layout = 0
         self.focused_client = None
@@ -202,8 +204,10 @@ class Workspace:
 
     def add(self, client):
         self.__clients[client.id] = client
+        self.__floating.append(client)
 
     def remove(self, client):
+        self.__floating.remove(client)
         if self.focused_client == client:
             client.unfocus()
             self.focused_client = None
@@ -226,6 +230,8 @@ class Workspace:
 
     def __tile(self, client):
         client.tile()
+        self.__floating.remove(client)
+
         if self.__master is not None:
             self.__slaves.insert(0,self.__master)
 
@@ -234,6 +240,8 @@ class Workspace:
 
     def __untile(self, client):
         client.untile()
+        self.__floating.append(client)
+
         if self.__master.id == client.id:
             self.__master = None
             if len(self.__slaves) == 0:
@@ -261,6 +269,33 @@ class Workspace:
     def attach(self, client):
         self.add(client)
         client.attach(self)
+
+    def next_client(self):
+        if self.focused_client is None:
+            return
+
+        if self.focused_client.tiled and len(self.__slaves) != 0:
+            if self.focused_client == self.__master:
+                return self.update_focus(self.__slaves[0])
+
+            for n in range(len(self.__slaves)):
+                if self.__slaves[n] == self.focused_client:
+                    n = (n+1)%len(self.__slaves)
+                    if n != 0:
+                        return self.update_focus(self.__slaves[n])
+                    if len(self.__floating) == 0:
+                        return self.update_focus(self.__master)
+
+                    return self.update_focus(self.__floating[0])
+
+        for n in range(len(self.__floating)):
+            if self.__floating[n] == self.focused_client:
+                    n = (n+1)%len(self.__floating)
+                    if n != 0:
+                        return self.update_focus(self.__floating[n])
+                    elif self.__master != None:
+                        return self.update_focus(self.__master)
+            
 
     def update_focus(self, client):
         if self.focused_client is not None:
@@ -312,11 +347,11 @@ class Geometry:
         self.b = b
 
 class Client:
-    def __init__(self, event, workspace):
+    def __init__(self, x,y, w,h, b, workspace):
         self.id = event.window
         self.parent = event.parent
-        self.geo_virt = Geometry(event.x, event.y, event.width, event.height, event.border_width)
-        self.geo_want = Geometry(event.x, event.y, event.width, event.height, event.border_width)
+        self.geo_virt = Geometry(x,y,w,h,b)
+        self.geo_want = Geometry(x,y,w,h,b)
         self.border_color = Screen.passive_color
         self.workspace = workspace
         self.tiled = False
@@ -397,9 +432,9 @@ class Client:
         con.core.ReparentWindow(self.id, self.parent, self.geo_virt.x, self.geo_virt.y)
 
     def focus(self):
-        #con.core.SetInputFocus(InputFocus.PointerRoot, self.id, InputFocus._None)
         self.border_color = Screen.focused_color
         self.update_border_color()
+        con.core.SetInputFocus(InputFocus.PointerRoot, self.id, InputFocus._None)
 
     def unfocus(self):
         self.border_color = Screen.passive_color
@@ -501,6 +536,14 @@ def vanilla_configure_window_request(event):
 #
 # Events
 #
+def event_enter_notify(event):
+    print "enter notify:",event.__dict__
+    set_current_screen(Geometry(event.root_x, event.root_y))
+    wk = current_workspace()
+    cl = wk.get_client(event.event)
+    if cl is not None:
+        wk.update_focus(cl)
+
 def event_configure_window_request(event):
     wk = current_workspace()
     cl = wk.get_client(event.window)
@@ -509,11 +552,14 @@ def event_configure_window_request(event):
     else:
         cl.configure(event)
 
-def event_create_notify(event):
-    if event.override_redirect == 0:
-        print "new client %d" % event.window
-        wk = current_workspace()
-        wk.add(Client(event, wk))
+def event_map_window(event):
+    print "map request:", event.__dict__
+    wk = current_workspace()
+    cl = wk.get_client(event.window)
+    if cl is None:
+        cl = Client(0,0,0,0,1, wk)
+        wk.add(cl)
+        wk.map(cl)
 
 def event_destroy_notify(event):
     wk = current_workspace()
@@ -523,20 +569,6 @@ def event_destroy_notify(event):
         if(cl.tiled):
             wk.untile(cl)
         wk.remove(cl)
-
-def event_map_window(event):
-    wk = current_workspace()
-    cl = wk.get_client(event.window)
-    if cl is not None:
-        wk.map(cl)
-
-def event_enter_notify(event):
-    print "enter notify:",event.__dict__
-    set_current_screen(Geometry(event.root_x, event.root_y))
-    wk = current_workspace()
-    cl = wk.get_client(event.event)
-    if cl is not None:
-        wk.update_focus(cl)
 
 # def event_reparent_notify(event):
     # wk = current_workspace()
@@ -565,11 +597,10 @@ def event_button_release(event):
 #|EventMask.ButtonPress|EventMask.ButtonRelease
 events = [EventMask.SubstructureRedirect|EventMask.SubstructureNotify|EventMask.EnterWindow|EventMask.StructureNotify|EventMask.PropertyChange|EventMask.FocusChange]
 
-event_handlers = { CreateNotifyEvent:event_create_notify,
-                   DestroyNotifyEvent:event_destroy_notify,
+event_handlers = { EnterNotifyEvent:event_enter_notify,
                    ConfigureRequestEvent:event_configure_window_request,
                    MapRequestEvent:event_map_window,
-                   EnterNotifyEvent:event_enter_notify,
+                   DestroyNotifyEvent:event_destroy_notify,
                    KeyPressEvent:event_key_press,
                    KeyReleaseEvent:event_key_release,
                    MotionNotifyEvent:event_motion_notify,
@@ -750,6 +781,9 @@ def resize_client(c, up, left, dx, dy):
 def next_layout():
     current_workspace().next_layout()
 
+def next_client():
+    current_workspace().next_client()
+
 def toggle_show_desktop():
     wk = current_workspace()
     wk.toggle_desktop()
@@ -802,6 +836,7 @@ def spawn(*args):
 class KeyMap:
     left           = 113
     right          = 114
+    tab            = 23
     space          = 65
     t              = 28
     d              = 40
@@ -830,6 +865,7 @@ keyboard_bindings = [ (KeyMap.mod_alt, KeyMap.space, next_layout),
                       (KeyMap.mod_alt, KeyMap.d,     toggle_show_desktop),
                       (KeyMap.mod_alt, KeyMap.right, next_workspace),
                       (KeyMap.mod_alt, KeyMap.left,  prev_workspace),
+                      (KeyMap.mod_alt, KeyMap.tab,   next_client),
 #                      (KeyMap.mod_alt, KeyMap.s,     lambda:spawn("/usr/bin/xterm","-bg","lightgreen",{"DISPLAY":":0"})),
                       (KeyMap.mod_alt, KeyMap.s,     lambda:spawn("/usr/bin/xterm","-bg","lightgreen",{"DISPLAY":":1"})),
                       ]
@@ -908,6 +944,10 @@ for sid in screen_ids:
 
 con.core.UngrabServer()
 con.flush()
+
+while con.poll_for_event():
+    pass
+
 keyboard.attach(keyboard_bindings)
 mouse.attach(mouse_bindings)
 
