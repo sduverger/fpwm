@@ -559,7 +559,7 @@ def event_map_window(event):
     if cl is None:
         cl = Client(0,0,0,0,1, wk)
         wk.add(cl)
-        wk.map(cl)
+    wk.map(cl)
 
 def event_destroy_notify(event):
     wk = current_workspace()
