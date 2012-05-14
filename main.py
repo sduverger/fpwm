@@ -437,15 +437,13 @@ class Client:
         con.core.send_request(xcb.Request(pkt, 12, True, False), xcb.VoidCookie())
 
     def synthetic_configure_notify(self):
+        print "configure: x %d y %d w %d h %d" % (self.geo_want.x, self.geo_want.y, self.geo_want.w, self.geo_want.h)
         event = pack("=B3xIIIHHHHHBx", 22, self.id, self.id, 0,
                      self.geo_want.x, self.geo_want.y,
                      self.geo_want.w, self.geo_want.h, self.geo_want.b, 0)
         con.core.SendEvent(False, self.id, EventMask.StructureNotify, event)
 
     def moveresize(self):
-        if not self.never_tiled:
-            return
-
         if self.geo_want.x != self.geo_virt.x:
             self.geo_virt.x = self.geo_want.x
 
@@ -461,6 +459,9 @@ class Client:
         self.real_configure_notify()
 
     def configure(self, event):
+        if not self.never_tiled:
+            return
+
         if event.value_mask & ConfigWindow.X:
             self.geo_want.x = event.x
         if event.value_mask & ConfigWindow.Y:
