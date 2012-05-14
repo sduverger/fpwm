@@ -70,19 +70,22 @@ class Screen:
     focused_color = 0x94bff3
     passive_color = 0x505050
 
-    def __init__(self, screen, workspaces):
-        self.root = screen.root
-        self.width = screen.width_in_pixels
-        self.height = screen.height_in_pixels
-        self.visual = screen.root_visual
-        self.depth = screen.root_depth
+    def __init__(self, viewport, x, y, w, h, workspaces):
+        self.root = viewport.root
+        self.visual = viewport.root_visual
+        self.depth = viewport.root_depth
+        self.x = x
+        self.y = y
+        self.width = w
+        self.height = h
         self.workspaces = workspaces
         self.active_workspace = None
 
-    def setup(self):
         ChangeProperty(con.core, PropMode.Replace, self.root, atoms["_NET_SUPPORTED"], Atom.ATOM, 32, len(atoms), atoms.itervalues())
+
         self.wm = con.generate_id()
         con.core.CreateWindow(self.depth, self.wm, self.root, -1, -1, 1, 1, 0, WindowClass.CopyFromParent, self.visual, 0, [])
+
         ChangeProperty(con.core, PropMode.Replace, self.root,  atoms["_NET_SUPPORTING_WM_CHECK"], Atom.WINDOW, 32, 1, self.wm)
         ChangeProperty(con.core, PropMode.Replace, self.wm, atoms["_NET_SUPPORTING_WM_CHECK"], Atom.WINDOW, 32, 1, self.wm)
         ChangeProperty(con.core, PropMode.Replace, self.wm, atoms["_NET_WM_NAME"], Atom.STRING, 8, len(wmname), wmname)
@@ -118,16 +121,16 @@ class LayoutVTall(LayoutTall):
         LayoutTall.__init__(self, workspace, self.__map_master, self.__map_slaves)
 
     def __map_master(self, master, slaves):
-        master.geo_real.b = 1
-        master.geo_real.x = 0
-        master.geo_real.y = 0
-        master.geo_real.h = self.workspace.screen.height - 2*master.geo_real.b
+        master.geo_virt.b = 1
+        master.geo_virt.x = 0
+        master.geo_virt.y = 0
+        master.geo_virt.h = self.workspace.screen.height - 2*master.geo_virt.b
 
         if len(slaves) == 0:
-            master.geo_real.w = self.workspace.screen.width - 2*master.geo_real.b
+            master.geo_virt.w = self.workspace.screen.width - 2*master.geo_virt.b
             do_slaves = False
         else:
-            master.geo_real.w = self.workspace.screen.width/2 - 2*master.geo_real.b
+            master.geo_virt.w = self.workspace.screen.width/2 - 2*master.geo_virt.b
             do_slaves = True
 
         master.real_configure_notify()
@@ -139,10 +142,10 @@ class LayoutVTall(LayoutTall):
             H = self.workspace.screen.height/L
             for i in range(L):
                 c = slaves[i]
-                c.geo_real.x = self.workspace.screen.width/2
-                c.geo_real.y = i*H
-                c.geo_real.w = self.workspace.screen.width/2 - 2*c.geo_real.b
-                c.geo_real.h = H - 2*c.geo_real.b
+                c.geo_virt.x = self.workspace.screen.width/2
+                c.geo_virt.y = i*H
+                c.geo_virt.w = self.workspace.screen.width/2 - 2*c.geo_virt.b
+                c.geo_virt.h = H - 2*c.geo_virt.b
                 c.real_configure_notify()
 
 class LayoutHTall(LayoutTall):
@@ -150,16 +153,16 @@ class LayoutHTall(LayoutTall):
         LayoutTall.__init__(self, workspace, self.__map_master, self.__map_slaves)
 
     def __map_master(self, master, slaves):
-        master.geo_real.b = 1
-        master.geo_real.x = 0
-        master.geo_real.y = 0
-        master.geo_real.w = self.workspace.screen.width - 2*master.geo_real.b
+        master.geo_virt.b = 1
+        master.geo_virt.x = 0
+        master.geo_virt.y = 0
+        master.geo_virt.w = self.workspace.screen.width - 2*master.geo_virt.b
 
         if len(slaves) == 0:
-            master.geo_real.h = self.workspace.screen.height - 2*master.geo_real.b
+            master.geo_virt.h = self.workspace.screen.height - 2*master.geo_virt.b
             do_slaves = False
         else:
-            master.geo_real.h = self.workspace.screen.height/2 - 2*master.geo_real.b
+            master.geo_virt.h = self.workspace.screen.height/2 - 2*master.geo_virt.b
             do_slaves = True
 
         master.real_configure_notify()
@@ -171,19 +174,18 @@ class LayoutHTall(LayoutTall):
             W = self.workspace.screen.width/L
             for i in range(L):
                 c = slaves[i]
-                c.geo_real.y = self.workspace.screen.height/2
-                c.geo_real.x = i*W
-                c.geo_real.h = self.workspace.screen.height/2 - 2*c.geo_real.b
-                c.geo_real.w = W - (2*c.geo_real.b)
+                c.geo_virt.y = self.workspace.screen.height/2
+                c.geo_virt.x = i*W
+                c.geo_virt.h = self.workspace.screen.height/2 - 2*c.geo_virt.b
+                c.geo_virt.w = W - (2*c.geo_virt.b)
                 c.real_configure_notify()
 
 #
 # Workspace
 #
 class Workspace:
-    def __init__(self, name, vroot):
+    def __init__(self, name, viewport):
         self.name = name
-        self.vroot = vroot
         self.screen = None
         self.__clients = {}
         self.__master = None
@@ -193,10 +195,15 @@ class Workspace:
         self.focused_client = None
         self.__toggle_desktop = False
 
-    def add_client(self, client):
+        self.vroot = con.generate_id()
+        con.core.CreateWindow(viewport.root_depth, self.vroot, viewport.root,
+                              -1, -1, 1, 1, 0, WindowClass.CopyFromParent,
+                              viewport.root_visual, 0, [])
+
+    def add(self, client):
         self.__clients[client.id] = client
 
-    def del_client(self, client):
+    def remove(self, client):
         if self.focused_client == client:
             client.unfocus()
             self.focused_client = None
@@ -247,6 +254,14 @@ class Workspace:
             return
         self.__tile(client)
 
+    def detach(self, client):
+        self.untile(client)
+        self.remove(client)
+
+    def attach(self, client):
+        self.add(client)
+        client.attach(self)
+
     def update_focus(self, client):
         if self.focused_client is not None:
             self.focused_client.unfocus()
@@ -264,6 +279,7 @@ class Workspace:
     def set_active(self, screen):
         self.screen = screen
         self.reparent(self.screen.root)
+        self.update()
 
     def next_layout(self):
         if self.screen == None:
@@ -288,7 +304,7 @@ class Workspace:
 # Client
 #
 class Geometry:
-    def __init__(self, x,y, w,h, b):
+    def __init__(self, x, y, w=0, h=0, b=0):
         self.x = x
         self.y = y
         self.w = w
@@ -299,7 +315,7 @@ class Client:
     def __init__(self, event, workspace):
         self.id = event.window
         self.parent = event.parent
-        self.geo_real = Geometry(event.x, event.y, event.width, event.height, event.border_width)
+        self.geo_virt = Geometry(event.x, event.y, event.width, event.height, event.border_width)
         self.geo_want = Geometry(event.x, event.y, event.width, event.height, event.border_width)
         self.border_color = Screen.passive_color
         self.workspace = workspace
@@ -313,9 +329,25 @@ class Client:
         mask  = EventMask.EnterWindow|EventMask.PropertyChange|EventMask.FocusChange
         con.core.ChangeWindowAttributes(self.id, CW.EventMask, [mask])
 
+    def absolute_geometry(self):
+        return Geometry(self.geo_virt.x+self.workspace.screen.x, self.geo_virt.y+self.workspace.screen.y)
+
+    def located_into(self, workspace):
+        geo_abs = self.absolute_geometry()
+        screen = workspace.screen
+        if geo_abs.x >= screen.x and geo_abs.x < screen.x+screen.width:
+            return True
+        return False
+
+    def attach(self, workspace):
+        geo_abs = self.absolute_geometry()
+        self.geo_virt.x = geo_abs.x - workspace.screen.x
+        self.geo_virt.y = geo_abs.y - workspace.screen.y
+        self.workspace = workspace
+
     def move(self, dx, dy):
-        self.geo_real.x += dx
-        self.geo_real.y += dy
+        self.geo_virt.x += dx
+        self.geo_virt.y += dy
         self.real_configure_notify()
 
     def resize(self, up, left, dx, dy):
@@ -336,17 +368,17 @@ class Client:
             mx = 0
             my = 0
 
-        if self.geo_real.w < self.__min_w:
-            self.geo_real.w = self.__min_w
+        if self.geo_virt.w < self.__min_w:
+            self.geo_virt.w = self.__min_w
 
-        if self.geo_real.w == self.__min_w and dx < 0:
+        if self.geo_virt.w == self.__min_w and dx < 0:
             dx = 0
             mx = 0
 
-        if self.geo_real.h < self.__min_h:
-            self.geo_real.h = self.__min_h
+        if self.geo_virt.h < self.__min_h:
+            self.geo_virt.h = self.__min_h
 
-        if self.geo_real.h == self.__min_h and dy < 0:
+        if self.geo_virt.h == self.__min_h and dy < 0:
             dy = 0
             my = 0
 
@@ -356,13 +388,13 @@ class Client:
         if mx != 0 or my != 0:
             self.move(mx, my)
 
-        self.geo_real.w += dx
-        self.geo_real.h += dy
+        self.geo_virt.w += dx
+        self.geo_virt.h += dy
         self.real_configure_notify()
 
     def reparent(self, who):
         self.parent = who
-        con.core.ReparentWindow(self.id, self.parent, self.geo_real.x, self.geo_real.y)
+        con.core.ReparentWindow(self.id, self.parent, self.geo_virt.x, self.geo_virt.y)
 
     def focus(self):
         #con.core.SetInputFocus(InputFocus.PointerRoot, self.id, InputFocus._None)
@@ -397,10 +429,11 @@ class Client:
         con.core.ConfigureWindow(self.id, ConfigWindow.StackMode, [StackMode.Above])
 
     def real_configure_notify(self):
+        geo_abs = self.absolute_geometry()
         mask = ConfigWindow.X|ConfigWindow.Y|ConfigWindow.Width|ConfigWindow.Height|ConfigWindow.BorderWidth
-        pkt = pack('=xx2xIH2xiiIII', self.id, mask,
-                   self.geo_real.x, self.geo_real.y,
-                   self.geo_real.w, self.geo_real.h, self.geo_real.b)
+        print "configure: x %d y %d w %d h %d" % (geo_abs.x, geo_abs.y, self.geo_virt.w, self.geo_virt.h)
+        pkt = pack('=xx2xIH2xiiIII', self.id, mask, geo_abs.x, geo_abs.y,
+                   self.geo_virt.w, self.geo_virt.h, self.geo_virt.b)
         con.core.send_request(xcb.Request(pkt, 12, True, False), xcb.VoidCookie())
 
     def synthetic_configure_notify(self):
@@ -411,17 +444,17 @@ class Client:
 
     def moveresize(self):
         if not self.tiled:
-            if self.geo_want.x != self.geo_real.x:
-                self.geo_real.x = self.geo_want.x
+            if self.geo_want.x != self.geo_virt.x:
+                self.geo_virt.x = self.geo_want.x
 
-            if self.geo_want.y != self.geo_real.y:
-                self.geo_real.y = self.geo_want.y
+            if self.geo_want.y != self.geo_virt.y:
+                self.geo_virt.y = self.geo_want.y
 
-            if self.geo_want.w != self.geo_real.w:
-                self.geo_real.w = self.geo_want.w
+            if self.geo_want.w != self.geo_virt.w:
+                self.geo_virt.w = self.geo_want.w
 
-            if self.geo_want.h != self.geo_real.h:
-                self.geo_real.h = self.geo_want.h
+            if self.geo_want.h != self.geo_virt.h:
+                self.geo_virt.h = self.geo_want.h
 
         self.real_configure_notify()
 
@@ -477,7 +510,7 @@ def event_create_notify(event):
     if event.override_redirect == 0:
         print "new client %d" % event.window
         wk = current_workspace()
-        wk.add_client(Client(event, wk))
+        wk.add(Client(event, wk))
 
 def event_destroy_notify(event):
     wk = current_workspace()
@@ -486,7 +519,7 @@ def event_destroy_notify(event):
         print "destroy client %d" % event.window
         if(cl.tiled):
             wk.untile(cl)
-        wk.del_client(cl)
+        wk.remove(cl)
 
 def event_map_window(event):
     wk = current_workspace()
@@ -495,6 +528,8 @@ def event_map_window(event):
         wk.map(cl)
 
 def event_enter_notify(event):
+    print "enter notify:",event.__dict__
+    set_current_screen(Geometry(event.root_x, event.root_y))
     wk = current_workspace()
     cl = wk.get_client(event.event)
     if cl is not None:
@@ -505,7 +540,7 @@ def event_enter_notify(event):
     # cl = scr.get_client(event.window)
     # evt = pack("=B3xIIIHH3x",
     #            21, event.event, event.window, event.parent,
-    #            cl.geo_real.x, cl.geo_real.y)
+    #            cl.geo_virt.x, cl.geo_virt.y)
     # con.core.SendEvent(False, event.window, EventMask.StructureNotify, evt)
 
 def event_key_press(event):
@@ -569,11 +604,13 @@ class Keyboard:
         con.core.UngrabKey(False, current_client_id(), ModMask.Any)
 
     def press(self, event):
-        print "key press:",event.detail, event.state
+        print "key press:",event.__dict__
+        set_current_screen(Geometry(event.root_x, event.root_y))
         self.__bindings[event.detail][event.state]()
 
     def release(self, event):
-        print "key release:",event.detail, event.state
+        print "key release:",event.__dict__ 
+        set_current_screen(Geometry(event.root_x, event.root_y))
 
 #
 # Mouse
@@ -609,8 +646,8 @@ class Mouse:
         if self.__acting is None:
             return
 
-        dx = event.event_x - self.__x
-        dy = event.event_y - self.__y
+        dx = event.root_x - self.__x
+        dy = event.root_y - self.__y
 
         self.__acting(self.__c, self.__up, self.__left, dx, dy)
 
@@ -628,32 +665,47 @@ class Mouse:
             return
 
         self.__c.stack_above()
-
         self.__acting = self.__bindings[event.detail][event.state]
-        self.__x = event.event_x
-        self.__y = event.event_y
+        self.__x = event.root_x
+        self.__y = event.root_y
 
-        if self.__x < self.__c.geo_real.x+(2*self.__c.geo_real.b+self.__c.geo_real.w)/2:
+        if self.__x - wk.screen.x < self.__c.geo_virt.x+(2*self.__c.geo_virt.b+self.__c.geo_virt.w)/2:
             self.__left = True
         else:
             self.__left = False
 
-        if self.__y < self.__c.geo_real.y+(2*self.__c.geo_real.b+self.__c.geo_real.h)/2:
+        if self.__y - wk.screen.y < self.__c.geo_virt.y+(2*self.__c.geo_virt.b+self.__c.geo_virt.h)/2:
             self.__up = True
         else:
             self.__up = False
 
     def release(self, event):
         print "button release:",event.__dict__
+        set_current_screen(Geometry(event.root_x, event.root_y))
+
+        if self.__acting is None:
+            return
+
+        owk = self.__c.workspace
+        nwk = current_workspace()
+        if nwk != owk and self.__c.located_into(nwk):
+            owk.detach(self.__c)
+            nwk.attach(self.__c)
+
         self.__acting = None
 
 
 #
 # Services
 #
+def set_current_screen(geo):
+    global focused_screen
+    for s in _screens:
+        if geo.x >= s.x and geo.x < s.x+s.width:
+            focused_screen = s
+
 def current_screen():
-    #XXX: should be "focused" screen
-    return _screens[0]
+    return focused_screen
 
 def current_workspace():
     return current_screen().active_workspace
@@ -699,21 +751,6 @@ def toggle_show_desktop():
     wk = current_workspace()
     wk.toggle_desktop()
 
-def get_next_workspace_from(wk1):
-    n = 0
-    for w in _workspaces:
-        if w == wk1:
-            break
-        n += 1
-
-    while True:
-        n = (n+1)%len(_workspaces)
-        wk2 = _workspaces[n]
-        if wk2.screen == None:
-            return wk2
-        if w == wk1:
-            return None
-
 def get_workspace_at(wk1, stp):
     n = 0
     for w in _workspaces:
@@ -726,7 +763,7 @@ def get_workspace_at(wk1, stp):
         wk2 = _workspaces[n]
         if wk2.screen == None:
             return wk2
-        if w == wk1:
+        if wk2 == wk1:
             return None
 
 def next_workspace_from(wk1):
@@ -790,7 +827,8 @@ keyboard_bindings = [ (KeyMap.mod_alt, KeyMap.space, next_layout),
                       (KeyMap.mod_alt, KeyMap.d,     toggle_show_desktop),
                       (KeyMap.mod_alt, KeyMap.right, next_workspace),
                       (KeyMap.mod_alt, KeyMap.left,  prev_workspace),
-                      (KeyMap.mod_alt, KeyMap.s,     lambda:spawn("/usr/bin/xterm","-bg","lightgreen",{"DISPLAY":":1"})),
+                      (KeyMap.mod_alt, KeyMap.s,     lambda:spawn("/usr/bin/xterm","-bg","lightgreen",{"DISPLAY":":0"})),
+#                      (KeyMap.mod_alt, KeyMap.s,     lambda:spawn("/usr/bin/xterm","-bg","lightgreen",{"DISPLAY":":1"})),
                       ]
 
 mouse_bindings    = [ (KeyMap.mod_alt, 1, move_client),
@@ -799,25 +837,22 @@ mouse_bindings    = [ (KeyMap.mod_alt, 1, move_client),
 
 
 # XXX: KeyButMask.Mod2 is always set (xpyb/Xephyr bug ?)
-def xhephyr_fix(x):
-    for n in range(len(x)):
-        x[n] = (x[n][0]|KeyButMask.Mod2, x[n][1], x[n][2])
+# def xhephyr_fix(x):
+#     for n in range(len(x)):
+#         x[n] = (x[n][0]|KeyButMask.Mod2, x[n][1], x[n][2])
 
-xhephyr_fix(keyboard_bindings)
-xhephyr_fix(mouse_bindings)
+# xhephyr_fix(keyboard_bindings)
+# xhephyr_fix(mouse_bindings)
 
 #
 # Main
 #
 # TODO:
-#
-# - create _NET_VIRTUAL_ROOTS list
-# - manage xrandr
+# . acquire existing clients
+# . extend _NET_WM support (_NET_VIRTUAL_ROOTS, _NET_WM_HINTS, ...)
 #
 # BUGS:
-#
-# - firefox popups goes away when then mouse enters
-# - Mod.ctrl is always set under "my" Xephyr/python-xcb
+# . firefox menu goes away on enter notify (#signaled bug)
 #
 keyboard = Keyboard()
 mouse = Mouse()
@@ -826,46 +861,45 @@ _workspaces = []
 
 con = xcb.connect()
 setup = con.get_setup()
+viewport = setup.roots[0]
 xrandr = con(xcb.randr.key)
 
 con.core.GrabServer()
 
-atoms = {}
-for n in atom_names:
-    atoms[n] = con.core.InternAtom(False, len(n), n)
+while con.poll_for_event():
+    pass
 
-for n in atoms:
-    atoms[n] = atoms[n].reply().atom
+try:
+    con.core.ChangeWindowAttributesChecked(viewport.root, CW.EventMask, events).check()
+except BadAccess, e:
+    print "A window manager is already running !"
+    con.disconnect()
+    sys.exit(1)
 
-if len(workspaces) < len(setup.roots):
+reply = xrandr.GetScreenResources(viewport.root).reply()
+
+if len(workspaces) < reply.num_crtcs:
     print "Not enough workspaces"
     con.disconnect()
     sys.exit(1)
 
-dflt_scr = setup.roots[0]
-for w in workspaces:
-    vroot = con.generate_id()
-    con.core.CreateWindow(dflt_scr.root_depth, vroot, dflt_scr.root,
-                          -1, -1, 1, 1, 0, WindowClass.CopyFromParent,
-                          dflt_scr.root_visual, 0, [])
-    wk = Workspace(w, vroot)
-    _workspaces.append(wk)
+atoms = {}
+for n in atom_names:
+    atoms[n] = con.core.InternAtom(False, len(n), n)
+for n in atoms:
+    atoms[n] = atoms[n].reply().atom
 
-while con.poll_for_event():
-    pass
+for w in workspaces:
+    _workspaces.append(Workspace(w, viewport))
 
 w = 0
-for s in setup.roots:
-    try:
-        con.core.ChangeWindowAttributesChecked(s.root, CW.EventMask, events).check()
-    except BadAccess, e:
-        print "A window manager is already running !"
-        con.disconnect()
-        sys.exit(1)
-
-    scr = Screen(s, _workspaces)
-    scr.setup()
+screen_ids = unpack_from("%dI" % reply.num_crtcs, reply.crtcs.buf())
+for sid in screen_ids:
+    reply = xrandr.GetCrtcInfo(sid,0).reply()
+    scr = Screen(viewport, reply.x, reply.y, reply.width, reply.height, _workspaces)
     scr.set_workspace(_workspaces[w])
+    if reply.x == 0 and reply.y == 0:
+        focused_screen = scr
     _screens.append(scr)
     w += 1
 
