@@ -443,18 +443,20 @@ class Client:
         con.core.SendEvent(False, self.id, EventMask.StructureNotify, event)
 
     def moveresize(self):
-        if not self.tiled:
-            if self.geo_want.x != self.geo_virt.x:
-                self.geo_virt.x = self.geo_want.x
+        if not self.never_tiled:
+            return
 
-            if self.geo_want.y != self.geo_virt.y:
-                self.geo_virt.y = self.geo_want.y
+        if self.geo_want.x != self.geo_virt.x:
+            self.geo_virt.x = self.geo_want.x
 
-            if self.geo_want.w != self.geo_virt.w:
-                self.geo_virt.w = self.geo_want.w
+        if self.geo_want.y != self.geo_virt.y:
+            self.geo_virt.y = self.geo_want.y
 
-            if self.geo_want.h != self.geo_virt.h:
-                self.geo_virt.h = self.geo_want.h
+        if self.geo_want.w != self.geo_virt.w:
+            self.geo_virt.w = self.geo_want.w
+
+        if self.geo_want.h != self.geo_virt.h:
+            self.geo_virt.h = self.geo_want.h
 
         self.real_configure_notify()
 
@@ -827,8 +829,8 @@ keyboard_bindings = [ (KeyMap.mod_alt, KeyMap.space, next_layout),
                       (KeyMap.mod_alt, KeyMap.d,     toggle_show_desktop),
                       (KeyMap.mod_alt, KeyMap.right, next_workspace),
                       (KeyMap.mod_alt, KeyMap.left,  prev_workspace),
-                      (KeyMap.mod_alt, KeyMap.s,     lambda:spawn("/usr/bin/xterm","-bg","lightgreen",{"DISPLAY":":0"})),
-#                      (KeyMap.mod_alt, KeyMap.s,     lambda:spawn("/usr/bin/xterm","-bg","lightgreen",{"DISPLAY":":1"})),
+#                      (KeyMap.mod_alt, KeyMap.s,     lambda:spawn("/usr/bin/xterm","-bg","lightgreen",{"DISPLAY":":0"})),
+                      (KeyMap.mod_alt, KeyMap.s,     lambda:spawn("/usr/bin/xterm","-bg","lightgreen",{"DISPLAY":":1"})),
                       ]
 
 mouse_bindings    = [ (KeyMap.mod_alt, 1, move_client),
@@ -837,12 +839,12 @@ mouse_bindings    = [ (KeyMap.mod_alt, 1, move_client),
 
 
 # XXX: KeyButMask.Mod2 is always set (xpyb/Xephyr bug ?)
-# def xhephyr_fix(x):
-#     for n in range(len(x)):
-#         x[n] = (x[n][0]|KeyButMask.Mod2, x[n][1], x[n][2])
+def xhephyr_fix(x):
+    for n in range(len(x)):
+        x[n] = (x[n][0]|KeyButMask.Mod2, x[n][1], x[n][2])
 
-# xhephyr_fix(keyboard_bindings)
-# xhephyr_fix(mouse_bindings)
+xhephyr_fix(keyboard_bindings)
+xhephyr_fix(mouse_bindings)
 
 #
 # Main
