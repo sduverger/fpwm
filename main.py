@@ -274,28 +274,71 @@ class Workspace:
         if self.focused_client is None:
             return
 
-        if self.focused_client.tiled and len(self.__slaves) != 0:
+        if self.focused_client.tiled:
             if self.focused_client == self.__master:
-                return self.update_focus(self.__slaves[0])
+                if len(self.__slaves) != 0:
+                    return self.update_focus(self.__slaves[0])
+                elif len(self.__floating) != 0:
+                    return self.update_focus(self.__floating[0])
+            else:
+                for n in range(len(self.__slaves)):
+                    if self.__slaves[n] == self.focused_client:
+                        break
 
-            for n in range(len(self.__slaves)):
-                if self.__slaves[n] == self.focused_client:
-                    n = (n+1)%len(self.__slaves)
-                    if n != 0:
-                        return self.update_focus(self.__slaves[n])
-                    if len(self.__floating) == 0:
-                        return self.update_focus(self.__master)
+                n = (n+1)%len(self.__slaves)
+                if n != 0:
+                    return self.update_focus(self.__slaves[n])
 
+                if len(self.__floating) != 0:
                     return self.update_focus(self.__floating[0])
 
-        for n in range(len(self.__floating)):
-            if self.__floating[n] == self.focused_client:
-                    n = (n+1)%len(self.__floating)
-                    if n != 0:
-                        return self.update_focus(self.__floating[n])
-                    elif self.__master != None:
-                        return self.update_focus(self.__master)
-            
+                return self.update_focus(self.__master)
+        else:
+            for n in range(len(self.__floating)):
+                if self.__floating[n] == self.focused_client:
+                    break
+
+            n = (n+1)%len(self.__floating)
+            if n != 0:
+                return self.update_focus(self.__floating[n])
+            elif self.__master != None:
+                return self.update_focus(self.__master)
+
+    def prev_client(self):
+        if self.focused_client is None:
+            return
+
+        last_sl = len(self.__slaves) - 1
+        last_fl = len(self.__floating) - 1
+
+        if self.focused_client.tiled:
+            if self.focused_client == self.__master:
+                if len(self.__floating) != 0:
+                    return self.update_focus(self.__floating[last_fl])
+                elif len(self.__slaves) != 0:
+                    return self.update_focus(self.__slaves[last_sl])
+            else:
+                for n in range(len(self.__slaves)):
+                    if self.__slaves[n] == self.focused_client:
+                        break
+
+                n = (n-1)%len(self.__slaves)
+                if n != last_sl:
+                    return self.update_focus(self.__slaves[n])
+
+                return self.update_focus(self.__master)
+        else:
+            for n in range(len(self.__floating)):
+                if self.__floating[n] == self.focused_client:
+                    break
+
+            n = (n-1)%len(self.__floating)
+            if n != last_fl:
+                return self.update_focus(self.__floating[n])
+            elif len(self.__slaves) != 0:
+                return self.update_focus(self.__slaves[last_sl])
+            elif self.__master != None:
+                return self.update_focus(self.__master)
 
     def update_focus(self, client):
         if self.focused_client is not None:
@@ -781,9 +824,6 @@ def resize_client(c, up, left, dx, dy):
 def next_layout():
     current_workspace().next_layout()
 
-def next_client():
-    current_workspace().next_client()
-
 def toggle_show_desktop():
     wk = current_workspace()
     wk.toggle_desktop()
@@ -818,6 +858,12 @@ def prev_workspace():
     nwk = prev_workspace_from(current_workspace())
     if nwk is not None:
         current_screen().set_workspace(nwk)
+
+def next_client():
+    current_workspace().next_client()
+
+def prev_client():
+    current_workspace().prev_client()
 
 def spawn(*args):
     print "spawn",args
@@ -866,6 +912,7 @@ keyboard_bindings = [ (KeyMap.mod_alt, KeyMap.space, next_layout),
                       (KeyMap.mod_alt, KeyMap.right, next_workspace),
                       (KeyMap.mod_alt, KeyMap.left,  prev_workspace),
                       (KeyMap.mod_alt, KeyMap.tab,   next_client),
+                      (KeyMap.mod_alt|KeyMap.mod_shift, KeyMap.tab,   prev_client),
 #                      (KeyMap.mod_alt, KeyMap.s,     lambda:spawn("/usr/bin/xterm","-bg","lightgreen",{"DISPLAY":":0"})),
                       (KeyMap.mod_alt, KeyMap.s,     lambda:spawn("/usr/bin/xterm","-bg","lightgreen",{"DISPLAY":":1"})),
                       ]
