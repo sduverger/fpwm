@@ -207,14 +207,12 @@ class Workspace:
         self.__floating.append(client)
 
     def remove(self, client):
-        self.__floating.remove(client)
         if self.focused_client == client:
             client.unfocus()
             self.focused_client = None
 
+        self.__floating.remove(client)
         self.__clients.__delitem__(client.id)
-        if len(self.__clients) == 0 and self.focused_client != None:
-            self.focused_client = None
 
     def get_client(self, id):
         return self.__clients.get(id, None)
@@ -299,10 +297,10 @@ class Workspace:
                     break
 
             n = (n+1)%len(self.__floating)
-            if n != 0:
+            if n != 0 or self.__master == None:
                 return self.update_focus(self.__floating[n])
-            elif self.__master != None:
-                return self.update_focus(self.__master)
+
+            return self.update_focus(self.__master)
 
     def prev_client(self):
         if self.focused_client is None:
@@ -333,12 +331,13 @@ class Workspace:
                     break
 
             n = (n-1)%len(self.__floating)
-            if n != last_fl:
-                return self.update_focus(self.__floating[n])
-            elif len(self.__slaves) != 0:
-                return self.update_focus(self.__slaves[last_sl])
-            elif self.__master != None:
-                return self.update_focus(self.__master)
+            if n == last_fl:
+                if len(self.__slaves) != 0:
+                    return self.update_focus(self.__slaves[last_sl])
+                elif self.__master != None:
+                    return self.update_focus(self.__master)
+
+            return self.update_focus(self.__floating[n])
 
     def update_focus(self, client):
         if self.focused_client is not None:
@@ -586,6 +585,8 @@ def event_enter_notify(event):
         wk = cl.workspace
         set_current_screen_from(wk.screen)
         wk.update_focus(cl)
+    else:
+        set_current_screen_at(Geometry(event.root_x, event.root_y))
 
 def event_configure_window_request(event):
     wk = current_workspace()
