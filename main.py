@@ -581,10 +581,10 @@ def vanilla_configure_window_request(event):
 #
 def event_enter_notify(event):
     print "enter notify:",event.__dict__
-    set_current_screen(Geometry(event.root_x, event.root_y))
-    wk = current_workspace()
-    cl = wk.get_client(event.event)
+    cl = _clients.get(event.event)
     if cl is not None:
+        wk = cl.workspace
+        set_current_screen_from(wk.screen)
         wk.update_focus(cl)
 
 def event_configure_window_request(event):
@@ -601,6 +601,7 @@ def event_map_window(event):
     cl = wk.get_client(event.window)
     if cl is None:
         cl = Client(event, wk)
+        _clients[cl.id] = cl
         wk.add(cl)
     wk.map(cl)
 
@@ -612,6 +613,7 @@ def event_destroy_notify(event):
         if(cl.tiled):
             wk.untile(cl)
         wk.remove(cl)
+        _clients.__delitem__(cl.id)
 
 # def event_reparent_notify(event):
     # wk = current_workspace()
@@ -682,12 +684,12 @@ class Keyboard:
 
     def press(self, event):
         print "key press:",event.__dict__
-        set_current_screen(Geometry(event.root_x, event.root_y))
+        set_current_screen_at(Geometry(event.root_x, event.root_y))
         self.__bindings[event.detail][event.state]()
 
     def release(self, event):
         print "key release:",event.__dict__ 
-        set_current_screen(Geometry(event.root_x, event.root_y))
+        set_current_screen_at(Geometry(event.root_x, event.root_y))
 
 #
 # Mouse
@@ -758,7 +760,7 @@ class Mouse:
 
     def release(self, event):
         print "button release:",event.__dict__
-        set_current_screen(Geometry(event.root_x, event.root_y))
+        set_current_screen_at(Geometry(event.root_x, event.root_y))
 
         if self.__acting is None:
             return
@@ -775,11 +777,15 @@ class Mouse:
 #
 # Services
 #
-def set_current_screen(geo):
+def set_current_screen_at(geo):
     global focused_screen
     for s in _screens:
         if geo.x >= s.x and geo.x < s.x+s.width:
             focused_screen = s
+
+def set_current_screen_from(screen):
+    global focused_screen
+    focused_screen = screen
 
 def current_screen():
     return focused_screen
@@ -944,6 +950,7 @@ keyboard = Keyboard()
 mouse = Mouse()
 _screens = []
 _workspaces = []
+_clients = {}
 
 con = xcb.connect()
 setup = con.get_setup()
