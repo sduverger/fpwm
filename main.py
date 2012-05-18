@@ -208,8 +208,11 @@ class Workspace:
 
     def remove(self, client):
         if self.focused_client == client:
-            client.unfocus()
-            self.focused_client = None
+            if len(self.__clients) > 1:
+                self.__next_client()
+            else:
+                client.unfocus()
+                self.focused_client = None
 
         self.__floating.remove(client)
         self.__clients.__delitem__(client.id)
@@ -272,6 +275,17 @@ class Workspace:
         if self.focused_client is None:
             return
 
+        self.__next_client()
+        # self.focused_client.stack_above()
+
+    def prev_client(self):
+        if self.focused_client is None:
+            return
+
+        self.__prev_client()
+        # self.focused_client.stack_above()
+
+    def __next_client(self):
         if self.focused_client.tiled:
             if self.focused_client == self.__master:
                 if len(self.__slaves) != 0:
@@ -302,10 +316,7 @@ class Workspace:
 
             return self.update_focus(self.__master)
 
-    def prev_client(self):
-        if self.focused_client is None:
-            return
-
+    def __prev_client(self):
         last_sl = len(self.__slaves) - 1
         last_fl = len(self.__floating) - 1
 
@@ -933,9 +944,9 @@ def xhephyr_fix(x):
     for n in range(len(x)):
         x[n] = (x[n][0]|KeyButMask.Mod2, x[n][1], x[n][2])
 
-xhephyr_fix(keyboard_bindings)
-keyboard_bindings[7] = (keyboard_bindings[7][0], keyboard_bindings[7][1], lambda:os.system("DISPLAY=:1 xterm&"))
-xhephyr_fix(mouse_bindings)
+# xhephyr_fix(keyboard_bindings)
+# keyboard_bindings[7] = (keyboard_bindings[7][0], keyboard_bindings[7][1], lambda:os.system("DISPLAY=:1 xterm&"))
+# xhephyr_fix(mouse_bindings)
 
 #
 # Main
