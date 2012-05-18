@@ -880,7 +880,7 @@ def spawn(*args):
     if os.fork() != 0:
         os._exit(0)
     os.setsid()
-    os.execle(args[0], *args)
+    os.execl(args[0], *args)
 
 #
 # Bindings
@@ -918,9 +918,8 @@ keyboard_bindings = [ (KeyMap.mod_alt, KeyMap.space, next_layout),
                       (KeyMap.mod_alt, KeyMap.right, next_workspace),
                       (KeyMap.mod_alt, KeyMap.left,  prev_workspace),
                       (KeyMap.mod_alt, KeyMap.tab,   next_client),
-                      (KeyMap.mod_alt|KeyMap.mod_shift, KeyMap.tab,   prev_client),
-#                      (KeyMap.mod_alt, KeyMap.s,     lambda:spawn("/usr/bin/xterm","-bg","lightgreen",{"DISPLAY":":0"})),
-                      (KeyMap.mod_alt, KeyMap.s,     lambda:spawn("/usr/bin/xterm","-bg","lightgreen",{"DISPLAY":":1"})),
+                      (KeyMap.mod_alt|KeyMap.mod_shift, KeyMap.tab, prev_client),
+                      (KeyMap.mod_alt, KeyMap.s, lambda:spawn("/usr/bin/xterm","-bg","lightgreen")),
                       ]
 
 mouse_bindings    = [ (KeyMap.mod_alt, 1, move_client),
@@ -934,6 +933,7 @@ def xhephyr_fix(x):
         x[n] = (x[n][0]|KeyButMask.Mod2, x[n][1], x[n][2])
 
 xhephyr_fix(keyboard_bindings)
+keyboard_bindings[7] = (keyboard_bindings[7][0], keyboard_bindings[7][1], lambda:os.system("DISPLAY=:1 xterm&"))
 xhephyr_fix(mouse_bindings)
 
 #
