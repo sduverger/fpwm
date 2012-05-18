@@ -276,14 +276,16 @@ class Workspace:
             return
 
         self.__next_client()
-        # self.focused_client.stack_above()
+        if not self.focused_client.tiled:
+            self.focused_client.stack_above()
 
     def prev_client(self):
         if self.focused_client is None:
             return
 
         self.__prev_client()
-        # self.focused_client.stack_above()
+        if not self.focused_client.tiled:
+            self.focused_client.stack_above()
 
     def __next_client(self):
         if self.focused_client.tiled:
