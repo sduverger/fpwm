@@ -196,8 +196,6 @@ class Workspace:
         self.current_layout = 0
         self.focused_client = None
         self.__toggle_desktop = False
-        self.__toggle_fullscreen = False
-        self.__full_geo = None
 
         self.vroot = con.generate_id()
         con.core.CreateWindow(viewport.root_depth, self.vroot, viewport.root,
@@ -394,29 +392,7 @@ class Workspace:
     def toggle_fullscreen(self):
         if self.screen is None or self.focused_client is None:
             return
-
-        if not self.__toggle_fullscreen:
-            print "enter fullscreen"
-            self.__full_geo = self.focused_client.relative_geometry()
-            self.focused_client.geo_virt.x = 0
-            self.focused_client.geo_virt.y = 0
-            self.focused_client.geo_virt.w = self.focused_client.workspace.screen.width
-            self.focused_client.geo_virt.h = self.focused_client.workspace.screen.height
-            self.__toggle_fullscreen = True
-            self.focused_client.stack_above()
-        else:
-            print "leave fullscreen"
-            self.focused_client.geo_virt.x = self.__full_geo.x
-            self.focused_client.geo_virt.y = self.__full_geo.y
-            self.focused_client.geo_virt.w = self.__full_geo.w
-            self.focused_client.geo_virt.h = self.__full_geo.h
-            self.__toggle_fullscreen = False
-
-            if self.focused_client.tiled:
-                self.focused_client.stack_below()
-
-        self.focused_client.real_configure_notify()
-
+        self.focused_client.toggle_maximize()
 
 #
 # Client
@@ -437,6 +413,7 @@ class Client:
         self.__min_h = 20
         self.geo_virt = Geometry(0,0, self.__min_w, self.__min_w, 1)
         self.geo_want = Geometry(0,0, self.__min_w, self.__min_w, 1)
+        self.geo_unmax = None
         self.border_color = Screen.passive_color
         self.workspace = workspace
         self.tiled = False
@@ -552,6 +529,32 @@ class Client:
 
     def stack_below(self):
         self.__stack(StackMode.Below)
+
+    def toggle_maximize(self):
+        if self.geo_unmax is None:
+            self.maximize()
+        else:
+            self.unmaximize()
+
+        self.real_configure_notify()
+
+    def maximize(self):
+        self.geo_unmax = self.relative_geometry()
+        self.geo_virt.x = 0
+        self.geo_virt.y = 0
+        self.geo_virt.w = self.workspace.screen.width
+        self.geo_virt.h = self.workspace.screen.height
+        self.stack_above()
+
+    def unmaximize(self):
+        self.geo_virt.x = self.geo_unmax.x
+        self.geo_virt.y = self.geo_unmax.y
+        self.geo_virt.w = self.geo_unmax.w
+        self.geo_virt.h = self.geo_unmax.h
+        self.geo_unmax = None
+
+        if self.tiled:
+            self.stack_below()
 
     def real_configure_notify(self):
         geo_abs = self.absolute_geometry()
