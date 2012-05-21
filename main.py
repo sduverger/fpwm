@@ -287,12 +287,12 @@ class Workspace:
         if not self.focused_client.tiled:
             self.focused_client.stack_above()
 
-    def __next_client(self):
+    def __next_client(self, with_floating=True):
         if self.focused_client.tiled:
             if self.focused_client == self.__master:
                 if len(self.__slaves) != 0:
                     return self.__slaves[0]
-                elif len(self.__floating) != 0:
+                elif with_floating and len(self.__floating) != 0:
                     return self.__floating[0]
             else:
                 for n in range(len(self.__slaves)):
@@ -303,11 +303,12 @@ class Workspace:
                 if n != 0:
                     return self.__slaves[n]
 
-                if len(self.__floating) != 0:
+                if with_floating and len(self.__floating) != 0:
                     return self.__floating[0]
 
                 return self.__master
-        else:
+
+        elif with_floating:
             for n in range(len(self.__floating)):
                 if self.__floating[n] == self.focused_client:
                     break
@@ -318,13 +319,13 @@ class Workspace:
 
             return self.__master
 
-    def __prev_client(self):
+    def __prev_client(self, with_floating=True):
         last_sl = len(self.__slaves) - 1
         last_fl = len(self.__floating) - 1
 
         if self.focused_client.tiled:
             if self.focused_client == self.__master:
-                if len(self.__floating) != 0:
+                if with_floating and len(self.__floating) != 0:
                     return self.__floating[last_fl]
                 elif len(self.__slaves) != 0:
                     return self.__slaves[last_sl]
@@ -338,7 +339,8 @@ class Workspace:
                     return self.__slaves[n]
 
                 return self.__master
-        else:
+
+        elif with_floating:
             for n in range(len(self.__floating)):
                 if self.__floating[n] == self.focused_client:
                     break
