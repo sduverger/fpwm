@@ -319,6 +319,8 @@ class Workspace:
 
             return self.__master
 
+        return self.focused_client
+
     def __prev_client(self, with_floating=True):
         last_sl = len(self.__slaves) - 1
         last_fl = len(self.__floating) - 1
@@ -353,6 +355,8 @@ class Workspace:
                     return self.__master
 
             return self.__floating[n]
+
+        return self.focused_client
 
     def update_focus(self, client):
         if self.focused_client is not None:
