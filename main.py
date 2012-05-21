@@ -381,7 +381,7 @@ class Workspace:
         self.update()
 
     def toggle_desktop(self):
-        if self.screen is None:
+        if self.screen is None or len(self.__clients) == 0:
             return
 
         if not self.__toggle_desktop:
