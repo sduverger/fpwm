@@ -271,22 +271,6 @@ class Workspace:
         self.add(client)
         client.attach(self)
 
-    def next_client(self):
-        if self.focused_client is None:
-            return
-
-        self.update_focus(self.__next_client())
-        if not self.focused_client.tiled:
-            self.focused_client.stack_above()
-
-    def prev_client(self):
-        if self.focused_client is None:
-            return
-
-        self.update_focus(self.__prev_client())
-        if not self.focused_client.tiled:
-            self.focused_client.stack_above()
-
     def __next_client(self, with_floating=True):
         if self.focused_client.tiled:
             if self.focused_client == self.__master:
@@ -357,6 +341,40 @@ class Workspace:
             return self.__floating[n]
 
         return self.focused_client
+
+    def next_client(self):
+        if self.focused_client is None:
+            return
+
+        self.update_focus(self.__next_client())
+        if not self.focused_client.tiled:
+            self.focused_client.stack_above()
+
+    def prev_client(self):
+        if self.focused_client is None:
+            return
+
+        self.update_focus(self.__prev_client())
+        if not self.focused_client.tiled:
+            self.focused_client.stack_above()
+
+    def laydown_client(self):
+        if self.focused_client is None or not self.focused_client.tiled:
+            return
+
+        if len(self.__slaves) == 0:
+            return 
+
+        print "laydown not implemented"
+
+    def layup_client(self):
+        if self.focused_client is None or not self.focused_client.tiled:
+            return
+
+        if len(self.__slaves) == 0:
+            return 
+
+        print "layup not implemented"
 
     def update_focus(self, client):
         if self.focused_client is not None:
@@ -920,10 +938,22 @@ def get_workspace_at(wk1, stp):
     while True:
         n = (n+stp)%len(_workspaces)
         wk2 = _workspaces[n]
-        if wk2.screen == None:
-            return wk2
         if wk2 == wk1:
             return None
+        if wk2.screen == None:
+            return wk2
+
+def goto_workspace(n):
+    if n >= len(_workspaces):
+        return
+
+    wk = _workspaces[n]
+    if wk == current_workspace():
+        return
+    if wk.screen is not None:
+        return
+
+    current_screen().set_workspace(wk)
 
 def next_workspace_from(wk1):
     return get_workspace_at(wk1, 1)
@@ -946,6 +976,12 @@ def next_client():
 
 def prev_client():
     current_workspace().prev_client()
+
+def layup_client():
+    current_workspace().layup_client()
+
+def laydown_client():
+    current_workspace().laydown_client()
 
 def spawn(*args):
     child = os.fork()
@@ -988,7 +1024,7 @@ class KeyMap:
     mod_win        = KeyButMask.Mod4
     mod_altgr      = KeyButMask.Mod5
 
-workspaces = [ "1", "2", "3", "4" ]
+workspaces = [ "1", "2", "3", "web" ]
 
 keyboard_bindings = [ (KeyMap.mod_alt, KeyMap.space, next_layout),
                       (KeyMap.mod_alt, KeyMap.t,     tile_client),
@@ -996,11 +1032,16 @@ keyboard_bindings = [ (KeyMap.mod_alt, KeyMap.space, next_layout),
                       (KeyMap.mod_alt, KeyMap.d,     toggle_show_desktop),
                       (KeyMap.mod_alt, KeyMap.right, next_workspace),
                       (KeyMap.mod_alt, KeyMap.left,  prev_workspace),
+                      (KeyMap.mod_alt, KeyMap.tab,   next_client),
                       (KeyMap.mod_alt, KeyMap.down,  next_client),
                       (KeyMap.mod_alt, KeyMap.up,    prev_client),
-                      (KeyMap.mod_alt, KeyMap.tab,   next_client),
-                      (KeyMap.mod_alt|KeyMap.mod_shift, KeyMap.tab, prev_client),
+                      (KeyMap.mod_alt|KeyMap.mod_shift, KeyMap.up, layup_client),
+                      (KeyMap.mod_alt|KeyMap.mod_shift, KeyMap.down, laydown_client),
                       (KeyMap.mod_alt, KeyMap.s, lambda:spawn("/usr/bin/xterm","-bg","lightgreen")),
+                      (KeyMap.mod_alt, KeyMap.n1, lambda: goto_workspace(0)),
+                      (KeyMap.mod_alt, KeyMap.n2, lambda: goto_workspace(1)),
+                      (KeyMap.mod_alt, KeyMap.n3, lambda: goto_workspace(2)),
+                      (KeyMap.mod_alt, KeyMap.n4, lambda: goto_workspace(3)),
                       ]
 
 mouse_bindings    = [ (KeyMap.mod_alt, 1, move_client),
