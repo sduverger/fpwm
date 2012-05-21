@@ -275,7 +275,7 @@ class Workspace:
         if self.focused_client is None:
             return
 
-        self.__next_client()
+        self.update_focus(self.__next_client())
         if not self.focused_client.tiled:
             self.focused_client.stack_above()
 
@@ -283,7 +283,7 @@ class Workspace:
         if self.focused_client is None:
             return
 
-        self.__prev_client()
+        self.update_focus(self.__prev_client())
         if not self.focused_client.tiled:
             self.focused_client.stack_above()
 
@@ -291,9 +291,9 @@ class Workspace:
         if self.focused_client.tiled:
             if self.focused_client == self.__master:
                 if len(self.__slaves) != 0:
-                    return self.update_focus(self.__slaves[0])
+                    return self.__slaves[0]
                 elif len(self.__floating) != 0:
-                    return self.update_focus(self.__floating[0])
+                    return self.__floating[0]
             else:
                 for n in range(len(self.__slaves)):
                     if self.__slaves[n] == self.focused_client:
@@ -301,12 +301,12 @@ class Workspace:
 
                 n = (n+1)%len(self.__slaves)
                 if n != 0:
-                    return self.update_focus(self.__slaves[n])
+                    return self.__slaves[n]
 
                 if len(self.__floating) != 0:
-                    return self.update_focus(self.__floating[0])
+                    return self.__floating[0]
 
-                return self.update_focus(self.__master)
+                return self.__master
         else:
             for n in range(len(self.__floating)):
                 if self.__floating[n] == self.focused_client:
@@ -314,9 +314,9 @@ class Workspace:
 
             n = (n+1)%len(self.__floating)
             if n != 0 or self.__master == None:
-                return self.update_focus(self.__floating[n])
+                return self.__floating[n]
 
-            return self.update_focus(self.__master)
+            return self.__master
 
     def __prev_client(self):
         last_sl = len(self.__slaves) - 1
@@ -325,9 +325,9 @@ class Workspace:
         if self.focused_client.tiled:
             if self.focused_client == self.__master:
                 if len(self.__floating) != 0:
-                    return self.update_focus(self.__floating[last_fl])
+                    return self.__floating[last_fl]
                 elif len(self.__slaves) != 0:
-                    return self.update_focus(self.__slaves[last_sl])
+                    return self.__slaves[last_sl]
             else:
                 for n in range(len(self.__slaves)):
                     if self.__slaves[n] == self.focused_client:
@@ -335,9 +335,9 @@ class Workspace:
 
                 n = (n-1)%len(self.__slaves)
                 if n != last_sl:
-                    return self.update_focus(self.__slaves[n])
+                    return self.__slaves[n]
 
-                return self.update_focus(self.__master)
+                return self.__master
         else:
             for n in range(len(self.__floating)):
                 if self.__floating[n] == self.focused_client:
@@ -346,11 +346,11 @@ class Workspace:
             n = (n-1)%len(self.__floating)
             if n == last_fl:
                 if len(self.__slaves) != 0:
-                    return self.update_focus(self.__slaves[last_sl])
+                    return self.__slaves[last_sl]
                 elif self.__master != None:
-                    return self.update_focus(self.__master)
+                    return self.__master
 
-            return self.update_focus(self.__floating[n])
+            return self.__floating[n]
 
     def update_focus(self, client):
         if self.focused_client is not None:
@@ -942,7 +942,6 @@ def prev_client():
     current_workspace().prev_client()
 
 def spawn(*args):
-    print "spawn",args
     child = os.fork()
     if child != 0:
         os.waitpid(child, 0)
@@ -1012,10 +1011,8 @@ mouse_bindings    = [ (KeyMap.mod_alt, 1, move_client),
 # Main
 #
 # TODO:
+# . acquire existing clients
 # . extend _NET_WM support (_NET_VIRTUAL_ROOTS, _NET_WM_HINTS, ...)
-#
-# BUGS:
-# . firefox menu goes away on enter notify (#signaled bug)
 #
 keyboard = Keyboard()
 mouse = Mouse()
