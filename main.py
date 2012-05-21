@@ -955,6 +955,8 @@ def spawn(*args):
 # Bindings
 #
 class KeyMap:
+    up             = 111
+    down           = 116
     left           = 113
     right          = 114
     tab            = 23
@@ -988,6 +990,8 @@ keyboard_bindings = [ (KeyMap.mod_alt, KeyMap.space, next_layout),
                       (KeyMap.mod_alt, KeyMap.d,     toggle_show_desktop),
                       (KeyMap.mod_alt, KeyMap.right, next_workspace),
                       (KeyMap.mod_alt, KeyMap.left,  prev_workspace),
+                      (KeyMap.mod_alt, KeyMap.down,  next_client),
+                      (KeyMap.mod_alt, KeyMap.up,    prev_client),
                       (KeyMap.mod_alt, KeyMap.tab,   next_client),
                       (KeyMap.mod_alt|KeyMap.mod_shift, KeyMap.tab, prev_client),
                       (KeyMap.mod_alt, KeyMap.s, lambda:spawn("/usr/bin/xterm","-bg","lightgreen")),
