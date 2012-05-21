@@ -196,6 +196,8 @@ class Workspace:
         self.current_layout = 0
         self.focused_client = None
         self.__toggle_desktop = False
+        self.__toggle_fullscreen = False
+        self.__full_geo = None
 
         self.vroot = con.generate_id()
         con.core.CreateWindow(viewport.root_depth, self.vroot, viewport.root,
@@ -372,14 +374,14 @@ class Workspace:
         self.update()
 
     def next_layout(self):
-        if self.screen == None:
+        if self.screen is None:
             return
 
         self.current_layout = (self.current_layout+1)%len(self.__layouts)
         self.update()
 
     def toggle_desktop(self):
-        if self.screen == None:
+        if self.screen is None:
             return
 
         if not self.__toggle_desktop:
@@ -389,12 +391,38 @@ class Workspace:
             con.core.MapSubwindows(self.screen.root)
             self.__toggle_desktop = False
 
+    def toggle_fullscreen(self):
+        if self.screen is None or self.focused_client is None:
+            return
+
+        if not self.__toggle_fullscreen:
+            print "enter fullscreen"
+            self.__full_geo = self.focused_client.relative_geometry()
+            self.focused_client.geo_virt.x = 0
+            self.focused_client.geo_virt.y = 0
+            self.focused_client.geo_virt.w = self.focused_client.workspace.screen.width
+            self.focused_client.geo_virt.h = self.focused_client.workspace.screen.height
+            self.__toggle_fullscreen = True
+            self.focused_client.stack_above()
+        else:
+            print "leave fullscreen"
+            self.focused_client.geo_virt.x = self.__full_geo.x
+            self.focused_client.geo_virt.y = self.__full_geo.y
+            self.focused_client.geo_virt.w = self.__full_geo.w
+            self.focused_client.geo_virt.h = self.__full_geo.h
+            self.__toggle_fullscreen = False
+
+            if self.focused_client.tiled:
+                self.focused_client.stack_below()
+
+        self.focused_client.real_configure_notify()
+
 
 #
 # Client
 #
 class Geometry:
-    def __init__(self, x, y, w=0, h=0, b=0):
+    def __init__(self, x=0, y=0, w=0, h=0, b=0):
         self.x = x
         self.y = y
         self.w = w
@@ -418,6 +446,9 @@ class Client:
     def __setup(self):
         mask  = EventMask.EnterWindow|EventMask.PropertyChange|EventMask.FocusChange
         con.core.ChangeWindowAttributes(self.id, CW.EventMask, [mask])
+
+    def relative_geometry(self):
+        return Geometry(self.geo_virt.x, self.geo_virt.y, self.geo_virt.w, self.geo_virt.h)
 
     def absolute_geometry(self):
         return Geometry(self.geo_virt.x+self.workspace.screen.x, self.geo_virt.y+self.workspace.screen.y)
@@ -504,19 +535,23 @@ class Client:
     def tile(self):
         if self.never_tiled:
             self.never_tiled = False
+
+        if not self.tiled:
             self.tiled = True
-        elif not self.tiled:
-            self.tiled = True
+            self.stack_below()
 
     def untile(self):
         if self.tiled:
             self.tiled = False
 
-    def destroy(self):
-        pass
+    def __stack(self, how):
+        con.core.ConfigureWindow(self.id, ConfigWindow.StackMode, [how])
 
     def stack_above(self):
-        con.core.ConfigureWindow(self.id, ConfigWindow.StackMode, [StackMode.Above])
+        self.__stack(StackMode.Above)
+
+    def stack_below(self):
+        self.__stack(StackMode.Below)
 
     def real_configure_notify(self):
         geo_abs = self.absolute_geometry()
@@ -568,6 +603,9 @@ class Client:
 
         return self.synthetic_configure_notify()
 
+#
+# Other clients
+#
 def vanilla_configure_window_request(event):
     values = []
     if event.value_mask & ConfigWindow.X:
@@ -587,6 +625,16 @@ def vanilla_configure_window_request(event):
 
     con.core.ConfigureWindow(event.window, event.value_mask, values)
 
+# def acquire_clients(viewport):
+#     reply = con.core.QueryTree(viewport.root).reply()
+#     if reply.children_len == 0:
+#         return
+#     children = unpack_from("%dI" % reply.children_len, reply.children.buf())
+#     for c in children:
+#         wa = con.core.GetWindowAttributes(c).reply()
+#         if wa.map_state == MapState.Unmapped or wa.override_redirect:
+#             continue
+#         geo = con.core.GetGeometry(c).reply()
 
 #
 # Events
@@ -698,12 +746,10 @@ class Keyboard:
 
     def press(self, event):
         print "key press:",event.__dict__
-        set_current_screen_at(Geometry(event.root_x, event.root_y))
         self.__bindings[event.detail][event.state]()
 
     def release(self, event):
         print "key release:",event.__dict__ 
-        set_current_screen_at(Geometry(event.root_x, event.root_y))
 
 #
 # Mouse
@@ -785,6 +831,9 @@ class Mouse:
             owk.detach(self.__c)
             nwk.attach(self.__c)
 
+        if self.__c.tiled:
+            self.__c.stack_below()
+
         self.__acting = None
 
 
@@ -848,6 +897,10 @@ def toggle_show_desktop():
     wk = current_workspace()
     wk.toggle_desktop()
 
+def toggle_fullscreen():
+    wk = current_workspace()
+    wk.toggle_fullscreen()
+
 def get_workspace_at(wk1, stp):
     n = 0
     for w in _workspaces:
@@ -906,6 +959,7 @@ class KeyMap:
     space          = 65
     t              = 28
     d              = 40
+    f              = 41
     s              = 39
     n1             = 10
     n2             = 11
@@ -928,6 +982,7 @@ workspaces = [ "1", "2", "3", "4" ]
 
 keyboard_bindings = [ (KeyMap.mod_alt, KeyMap.space, next_layout),
                       (KeyMap.mod_alt, KeyMap.t,     tile_client),
+                      (KeyMap.mod_alt, KeyMap.f,     toggle_fullscreen),
                       (KeyMap.mod_alt, KeyMap.d,     toggle_show_desktop),
                       (KeyMap.mod_alt, KeyMap.right, next_workspace),
                       (KeyMap.mod_alt, KeyMap.left,  prev_workspace),
@@ -942,9 +997,9 @@ mouse_bindings    = [ (KeyMap.mod_alt, 1, move_client),
 
 
 # XXX: KeyButMask.Mod2 is always set (xpyb/Xephyr bug ?)
-def xhephyr_fix(x):
-    for n in range(len(x)):
-        x[n] = (x[n][0]|KeyButMask.Mod2, x[n][1], x[n][2])
+# def xhephyr_fix(x):
+#     for n in range(len(x)):
+#         x[n] = (x[n][0]|KeyButMask.Mod2, x[n][1], x[n][2])
 
 # xhephyr_fix(keyboard_bindings)
 # keyboard_bindings[7] = (keyboard_bindings[7][0], keyboard_bindings[7][1], lambda:os.system("DISPLAY=:1 xterm&"))
@@ -954,7 +1009,6 @@ def xhephyr_fix(x):
 # Main
 #
 # TODO:
-# . acquire existing clients
 # . extend _NET_WM support (_NET_VIRTUAL_ROOTS, _NET_WM_HINTS, ...)
 #
 # BUGS:
@@ -1009,6 +1063,8 @@ for sid in screen_ids:
         focused_screen = scr
     _screens.append(scr)
     w += 1
+
+#acquire_clients(viewport)
 
 con.core.UngrabServer()
 con.flush()
