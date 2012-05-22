@@ -221,8 +221,14 @@ class Workspace:
         return self.__clients.get(id, None)
 
     def update(self):
+        if self.screen is None:
+            return
+
         if self.__master != None:
             self.__layouts[self.current_layout].update(self.__master, self.__slaves)
+
+        for c in self.__floating:
+            c.stack_above()
 
     def map(self, client):
         if client.never_tiled:
@@ -265,6 +271,7 @@ class Workspace:
 
     def detach(self, client):
         self.untile(client)
+        client.detach()
         self.remove(client)
 
     def attach(self, client):
@@ -461,10 +468,12 @@ class Client:
             return True
         return False
 
-    def attach(self, workspace):
+    def detach(self):
         geo_abs = self.absolute_geometry()
-        self.geo_virt.x = geo_abs.x - workspace.screen.x
-        self.geo_virt.y = geo_abs.y - workspace.screen.y
+        self.geo_virt.x = geo_abs.x - self.workspace.screen.x
+        self.geo_virt.y = geo_abs.y - self.workspace.screen.y
+
+    def attach(self, workspace):
         self.workspace = workspace
 
     def move(self, dx, dy):
@@ -699,7 +708,7 @@ def event_destroy_notify(event):
     cl = wk.get_client(event.window)
     if cl is not None:
         print "destroy client %d" % event.window
-        if(cl.tiled):
+        if cl.tiled:
             wk.untile(cl)
         wk.remove(cl)
         _clients.__delitem__(cl.id)
@@ -928,7 +937,7 @@ def toggle_fullscreen():
     wk = current_workspace()
     wk.toggle_fullscreen()
 
-def get_workspace_at(wk1, stp):
+def get_workspace_with(wk1, stp):
     n = 0
     for w in _workspaces:
         if w == wk1:
@@ -943,31 +952,63 @@ def get_workspace_at(wk1, stp):
         if wk2.screen == None:
             return wk2
 
-def goto_workspace(n):
+def get_workspace_at(n):
     if n >= len(_workspaces):
+        return None
+
+    return _workspaces[n]
+
+def get_next_workspace_with(wk):
+    return get_workspace_with(wk, 1)
+
+def get_prev_workspace_with(wk):
+    return get_workspace_with(wk, -1)
+
+def send_to_workspace_with(nwk):
+    c = current_client()
+    if nwk is None or c is None:
         return
 
-    wk = _workspaces[n]
-    if wk == current_workspace():
-        return
-    if wk.screen is not None:
-        return
+    cwk = c.workspace
+    tiled = c.tiled
 
-    current_screen().set_workspace(wk)
+    cwk.detach(c)
+    nwk.attach(c)
 
-def next_workspace_from(wk1):
-    return get_workspace_at(wk1, 1)
+    if tiled:
+        nwk.tile(c)
 
-def prev_workspace_from(wk1):
-    return get_workspace_at(wk1, -1)
+    if nwk.screen is None:
+        root = nwk.vroot
+    else:
+        root = nwk.screen.root
+        c.stack_above()
+
+    c.reparent(root)
+
+def send_to_workspace(n):
+    wk = get_workspace_at(n)
+    if wk is not None and wk != current_workspace():
+        send_to_workspace_with(wk)
+
+def send_to_next_workspace():
+    send_to_workspace_with(get_next_workspace_with(current_workspace()))
+
+def send_to_prev_workspace():
+    send_to_workspace_with(get_prev_workspace_with(current_workspace()))
+
+def goto_workspace(n):
+    wk = get_workspace_at(n)
+    if wk is not None and wk != current_workspace() and wk.screen is None:
+        current_screen().set_workspace(wk)
 
 def next_workspace():
-    nwk = next_workspace_from(current_workspace())
+    nwk = get_next_workspace_with(current_workspace())
     if nwk is not None:
         current_screen().set_workspace(nwk)
 
 def prev_workspace():
-    nwk = prev_workspace_from(current_workspace())
+    nwk = get_prev_workspace_with(current_workspace())
     if nwk is not None:
         current_screen().set_workspace(nwk)
 
@@ -1030,18 +1071,31 @@ keyboard_bindings = [ (KeyMap.mod_alt, KeyMap.space, next_layout),
                       (KeyMap.mod_alt, KeyMap.t,     tile_client),
                       (KeyMap.mod_alt, KeyMap.f,     toggle_fullscreen),
                       (KeyMap.mod_alt, KeyMap.d,     toggle_show_desktop),
+
                       (KeyMap.mod_alt, KeyMap.right, next_workspace),
                       (KeyMap.mod_alt, KeyMap.left,  prev_workspace),
+
+                      (KeyMap.mod_alt|KeyMap.mod_shift, KeyMap.right, lambda: (send_to_next_workspace(), next_workspace())),
+                      (KeyMap.mod_alt|KeyMap.mod_shift, KeyMap.left,  lambda: (send_to_prev_workspace(), prev_workspace())),
+
                       (KeyMap.mod_alt, KeyMap.tab,   next_client),
                       (KeyMap.mod_alt, KeyMap.down,  next_client),
                       (KeyMap.mod_alt, KeyMap.up,    prev_client),
+
                       (KeyMap.mod_alt|KeyMap.mod_shift, KeyMap.up, layup_client),
                       (KeyMap.mod_alt|KeyMap.mod_shift, KeyMap.down, laydown_client),
-                      (KeyMap.mod_alt, KeyMap.s, lambda:spawn("/usr/bin/xterm","-bg","lightgreen")),
+
                       (KeyMap.mod_alt, KeyMap.n1, lambda: goto_workspace(0)),
                       (KeyMap.mod_alt, KeyMap.n2, lambda: goto_workspace(1)),
                       (KeyMap.mod_alt, KeyMap.n3, lambda: goto_workspace(2)),
                       (KeyMap.mod_alt, KeyMap.n4, lambda: goto_workspace(3)),
+
+                      (KeyMap.mod_alt|KeyMap.mod_shift, KeyMap.n1, lambda: send_to_workspace(0)),
+                      (KeyMap.mod_alt|KeyMap.mod_shift, KeyMap.n2, lambda: send_to_workspace(1)),
+                      (KeyMap.mod_alt|KeyMap.mod_shift, KeyMap.n3, lambda: send_to_workspace(2)),
+                      (KeyMap.mod_alt|KeyMap.mod_shift, KeyMap.n4, lambda: send_to_workspace(3)),
+
+                      (KeyMap.mod_alt, KeyMap.s, lambda:spawn("/usr/bin/xterm","-bg","lightgreen")),
                       ]
 
 mouse_bindings    = [ (KeyMap.mod_alt, 1, move_client),
