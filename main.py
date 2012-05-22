@@ -71,7 +71,7 @@ class Screen:
     focused_color = 0xff0000
     passive_color = 0x505050
 
-    def __init__(self, viewport, x, y, w, h, workspaces):
+    def __init__(self, viewport, x, y, w, h, workspaces, gap=None):
         self.root = viewport.root
         self.visual = viewport.root_visual
         self.depth = viewport.root_depth
@@ -101,6 +101,7 @@ class Screen:
 
         self.active_workspace = workspace
         self.active_workspace.set_active(self)
+        update_workspace_info()
 
 #
 # Layout
@@ -948,14 +949,32 @@ def get_screen_at(geo):
 
 def set_current_screen_at(geo):
     global focused_screen
-    focused_screen = get_screen_at(geo)
+    ns = get_screen_at(geo)
+    if ns != focused_screen:
+        update_workspace_info()
+    focused_screen = ns
 
 def set_current_screen_from(screen):
     global focused_screen
+    if screen != focused_screen:
+        update_workspace_info()
     focused_screen = screen
 
 def current_screen():
     return focused_screen
+
+def update_workspace_info():
+    aw  = current_screen().active_workspace
+    vwn = []
+    hwn = []
+    for w in _workspaces:
+        if w.screen is None:
+            hwn.append(w.name)
+        elif w != aw:
+            vwn.append(w.name)
+
+    sys.stdout.write("%s %r %r\n" % (aw.name,vwn,hwn))
+    sys.stdout.flush()
 
 def current_workspace():
     return current_screen().active_workspace
@@ -1232,9 +1251,9 @@ screen_ids = unpack_from("%dI" % reply.num_crtcs, reply.crtcs.buf())
 for sid in screen_ids:
     reply = xrandr.GetCrtcInfo(sid,0).reply()
     scr = Screen(viewport, reply.x, reply.y, reply.width, reply.height, _workspaces)
-    scr.set_workspace(_workspaces[w])
     if reply.x == 0 and reply.y == 0:
         focused_screen = scr
+    scr.set_workspace(_workspaces[w])
     _screens.append(scr)
     w += 1
 
