@@ -471,9 +471,9 @@ class Geometry:
         self.b = b
 
 class Client:
-    def __init__(self, event, workspace):
-        self.id = event.window
-        self.parent = event.parent
+    def __init__(self, window, parent, workspace):
+        self.id = window
+        self.parent = parent
         self.__min_w = 20
         self.__min_h = 20
         self.geo_virt = Geometry(0,0, self.__min_w, self.__min_w, 1)
@@ -573,6 +573,11 @@ class Client:
     def update_border_color(self):
         con.core.ChangeWindowAttributes(self.id, CW.BorderPixel, [self.border_color])
 
+    def release(root):
+        self.geo_virt.x = 0
+        self.geo_virt.y = 0
+        self.reparent(root)
+
     def map(self):
         con.core.MapWindow(self.id)
 
@@ -626,13 +631,13 @@ class Client:
     def real_configure_notify(self):
         geo_abs = self.absolute_geometry()
         mask = ConfigWindow.X|ConfigWindow.Y|ConfigWindow.Width|ConfigWindow.Height|ConfigWindow.BorderWidth
-        print "configure: x %d y %d w %d h %d" % (geo_abs.x, geo_abs.y, self.geo_virt.w, self.geo_virt.h)
+        sys.stderr.write("r_configure: x %d y %d w %d h %d\n" % (geo_abs.x, geo_abs.y, self.geo_virt.w, self.geo_virt.h))
         pkt = pack('=xx2xIH2xiiIII', self.id, mask, geo_abs.x, geo_abs.y,
                    self.geo_virt.w, self.geo_virt.h, self.geo_virt.b)
         con.core.send_request(xcb.Request(pkt, 12, True, False), xcb.VoidCookie())
 
     def synthetic_configure_notify(self):
-        print "configure: x %d y %d w %d h %d" % (self.geo_want.x, self.geo_want.y, self.geo_want.w, self.geo_want.h)
+        sys.stderr.write("s_configure: x %d y %d w %d h %d\n" % (self.geo_want.x, self.geo_want.y, self.geo_want.w, self.geo_want.h))
         event = pack("=B3xIIIHHHHHBx", 22, self.id, self.id, 0,
                      self.geo_want.x, self.geo_want.y,
                      self.geo_want.w, self.geo_want.h, self.geo_want.b, 0)
@@ -695,22 +700,37 @@ def vanilla_configure_window_request(event):
 
     con.core.ConfigureWindow(event.window, event.value_mask, values)
 
-# def acquire_clients(viewport):
-#     reply = con.core.QueryTree(viewport.root).reply()
-#     if reply.children_len == 0:
-#         return
-#     children = unpack_from("%dI" % reply.children_len, reply.children.buf())
-#     for c in children:
-#         wa = con.core.GetWindowAttributes(c).reply()
-#         if wa.map_state == MapState.Unmapped or wa.override_redirect:
-#             continue
-#         geo = con.core.GetGeometry(c).reply()
+def acquire_ext_clients(viewport):
+    clients = []
+    reply = con.core.QueryTree(viewport.root).reply()
+    if reply.children_len == 0:
+        return clients
+    children = unpack_from("%dI" % reply.children_len, reply.children.buf())
+    for cid in children:
+        wa = con.core.GetWindowAttributes(cid).reply()
+        if wa.map_state == MapState.Unmapped or wa.override_redirect:
+            continue
+        geo = con.core.GetGeometry(cid).reply()
+        clients.append((cid, geo.x, geo.y))
+    return clients
+
+def add_ext_clients(ext_clients):
+    for cid,x,y in ext_clients:
+        wk = get_screen_at(Geometry(x, y)).active_workspace
+        cl = Client(cid, viewport.root, wk)
+        _clients[cid] = cl
+        wk.add(cl)
+        sys.stderr.write("acquired client %d\n" % cid)
+
+def release_clients(viewport):
+    for c in _clients:
+        c.release(viewport.root)
 
 #
 # Events
 #
 def event_enter_notify(event):
-    print "enter notify:",event.__dict__
+    sys.stderr.write("enter notify: %r\n" % event.__dict__)
     cl = _clients.get(event.event)
     if cl is not None:
         wk = cl.workspace
@@ -728,11 +748,11 @@ def event_configure_window_request(event):
         cl.configure(event)
 
 def event_map_window(event):
-    print "map request:", event.__dict__
+    sys.stderr.write("map request: %r\n" % event.__dict__)
     wk = current_workspace()
     cl = wk.get_client(event.window)
     if cl is None:
-        cl = Client(event, wk)
+        cl = Client(event.window, event.parent, wk)
         _clients[cl.id] = cl
         wk.add(cl)
     wk.map(cl)
@@ -741,7 +761,7 @@ def event_destroy_notify(event):
     wk = current_workspace()
     cl = wk.get_client(event.window)
     if cl is not None:
-        print "destroy client %d" % event.window
+        sys.stderr.write("destroy client %d\n" % event.window)
         if cl.tiled:
             wk.untile(cl)
         wk.remove(cl)
@@ -788,9 +808,9 @@ event_handlers = { EnterNotifyEvent:event_enter_notify,
 def event_handler(event):
     hdl = event_handlers.get(event.__class__, None)
     if hdl is None:
-        print "** Unhandled ** ",event.__class__.__name__, event.__dict__
+        sys.stderr.write("** Unhandled event ** %r %r\n" % (event.__class__.__name__, event.__dict__))
     else:
-        print "--> ",event.__class__.__name__
+        sys.stderr.write("--> %s\n" % event.__class__.__name__)
         hdl(event)
 
 #
@@ -815,11 +835,11 @@ class Keyboard:
         con.core.UngrabKey(False, current_client_id(), ModMask.Any)
 
     def press(self, event):
-        print "key press:",event.__dict__
+        sys.stderr.write("key press: %r\n" % event.__dict__)
         self.__bindings[event.detail][event.state]()
 
     def release(self, event):
-        print "key release:",event.__dict__ 
+        sys.stderr.write("key release: %r\n" % event.__dict__)
 
 #
 # Mouse
@@ -864,7 +884,7 @@ class Mouse:
         self.__y = event.event_y
 
     def press(self, event):
-        print "button press:",event.__dict__
+        sys.stderr.write("button press: %r\n" % event.__dict__)
         if self.__acting is not None or event.child == 0:
             return
 
@@ -889,7 +909,7 @@ class Mouse:
             self.__up = False
 
     def release(self, event):
-        print "button release:",event.__dict__
+        sys.stderr.write("button release: %r\n" % event.__dict__)
         set_current_screen_at(Geometry(event.root_x, event.root_y))
 
         if self.__acting is None:
@@ -910,11 +930,14 @@ class Mouse:
 #
 # Services
 #
-def set_current_screen_at(geo):
-    global focused_screen
+def get_screen_at(geo):
     for s in _screens:
         if geo.x >= s.x and geo.x < s.x+s.width:
-            focused_screen = s
+            return s
+
+def set_current_screen_at(geo):
+    global focused_screen
+    focused_screen = get_screen_at(geo)
 
 def set_current_screen_from(screen):
     global focused_screen
@@ -1150,7 +1173,6 @@ mouse_bindings    = [ (KeyMap.mod_alt, 1, move_client),
 # Main
 #
 # TODO:
-# . acquire existing clients
 # . extend _NET_WM support (_NET_VIRTUAL_ROOTS, _NET_WM_HINTS, ...)
 #
 keyboard = Keyboard()
@@ -1165,21 +1187,22 @@ viewport = setup.roots[0]
 xrandr = con(xcb.randr.key)
 
 con.core.GrabServer()
-
 while con.poll_for_event():
     pass
 
 try:
     con.core.ChangeWindowAttributesChecked(viewport.root, CW.EventMask, events).check()
 except BadAccess, e:
-    print "A window manager is already running !"
+    sys.stderr.write("A window manager is already running !\n")
     con.disconnect()
     sys.exit(1)
+
+ext_clients = acquire_ext_clients(viewport)
 
 reply = xrandr.GetScreenResources(viewport.root).reply()
 
 if len(workspaces) < reply.num_crtcs:
-    print "Not enough workspaces"
+    sys.stderr.write("Not enough workspaces\n")
     con.disconnect()
     sys.exit(1)
 
@@ -1203,11 +1226,10 @@ for sid in screen_ids:
     _screens.append(scr)
     w += 1
 
-#acquire_clients(viewport)
+add_ext_clients(ext_clients)
 
 con.core.UngrabServer()
 con.flush()
-
 while con.poll_for_event():
     pass
 
@@ -1217,14 +1239,12 @@ mouse.attach(mouse_bindings)
 while True:
     try:
         event = con.wait_for_event()
+        event_handler(event)
+        con.flush()
     except Exception, error:
-        print error.__class__.__name__
+        sys.stderr.write("panic: %s\n" % error.__class__.__name__)
+        mouse.detach()
+        keyboard.detach()
+        release_clients(viewport)
         con.disconnect()
         sys.exit(1)
-
-    event_handler(event)
-    con.flush()
-
-mouse.detach()
-keyboard.detach()
-con.disconnect()
