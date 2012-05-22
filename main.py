@@ -387,6 +387,9 @@ class Workspace:
                 self.__slaves.insert(0, self.__master)
                 self.__master = c
 
+        global _ignore_next_enter_notify
+        _ignore_next_enter_notify = True
+
         self.focused_client.focus()
         self.update()
 
@@ -413,6 +416,9 @@ class Workspace:
                 self.__slaves[n], self.__slaves[nn] = self.__slaves[nn], self.__slaves[n]
             else:
                 self.__master, self.__slaves[n] = self.__slaves[n], self.__master
+
+        global _ignore_next_enter_notify
+        _ignore_next_enter_notify = True
 
         self.focused_client.focus()
         self.update()
@@ -731,6 +737,11 @@ def release_clients(viewport):
 #
 def event_enter_notify(event):
     sys.stderr.write("enter notify: %r\n" % event.__dict__)
+    global _ignore_next_enter_notify
+    if _ignore_next_enter_notify:
+        _ignore_next_enter_notify = False
+        return
+
     cl = _clients.get(event.event)
     if cl is not None:
         wk = cl.workspace
@@ -1180,6 +1191,7 @@ mouse = Mouse()
 _screens = []
 _workspaces = []
 _clients = {}
+_ignore_next_enter_notify = False
 
 con = xcb.connect()
 setup = con.get_setup()
