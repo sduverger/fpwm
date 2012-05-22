@@ -64,6 +64,17 @@ def ChangeProperty(core, mode, window, property, type, format, data_len, data):
 
 
 #
+# Gap
+#
+class Gap():
+    def __init__(self, x=0, y=0, w=0, h=0, top=True):
+        self.x = x
+        self.y = y
+        self.w = w
+        self.h = h
+        self.top = top
+
+#
 # Screen
 #
 class Screen:
@@ -81,6 +92,11 @@ class Screen:
         self.height = h
         self.workspaces = workspaces
         self.active_workspace = None
+
+        if gap is not None:
+            self.height -= gap.h
+            if gap.top:
+                self.y += gap.h
 
         ChangeProperty(con.core, PropMode.Replace, self.root, atoms["_NET_SUPPORTED"], Atom.ATOM, 32, len(atoms), atoms.itervalues())
 
@@ -1189,6 +1205,7 @@ mouse_bindings    = [ (KeyMap.mod_alt, 1, move_client),
                       (KeyMap.mod_alt, 3, resize_client),
                       ]
 
+status_line = Gap(h=18)
 
 # XXX: KeyButMask.Mod2 is always set (xpyb/Xephyr bug ?)
 # def xhephyr_fix(x):
@@ -1250,7 +1267,11 @@ w = 0
 screen_ids = unpack_from("%dI" % reply.num_crtcs, reply.crtcs.buf())
 for sid in screen_ids:
     reply = xrandr.GetCrtcInfo(sid,0).reply()
-    scr = Screen(viewport, reply.x, reply.y, reply.width, reply.height, _workspaces)
+    if reply.x == status_line.x and reply.y == status_line.y:
+        gap = status_line
+    else:
+        gap = None
+    scr = Screen(viewport, reply.x, reply.y, reply.width, reply.height, _workspaces, gap)
     if reply.x == 0 and reply.y == 0:
         focused_screen = scr
     scr.set_workspace(_workspaces[w])
