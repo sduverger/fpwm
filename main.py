@@ -370,18 +370,52 @@ class Workspace:
             return
 
         if len(self.__slaves) == 0:
-            return 
+            return
 
-        print "laydown not implemented"
+        if self.focused_client == self.__master:
+            self.__master, self.__slaves[0] = self.__slaves[0], self.__master
+        else:
+            for n in range(len(self.__slaves)):
+                if self.__slaves[n] == self.focused_client:
+                    break
+
+            nn = (n+1)%len(self.__slaves)
+            if nn != 0:
+                self.__slaves[n], self.__slaves[nn] = self.__slaves[nn], self.__slaves[n]
+            else:
+                c = self.__slaves.pop(n)
+                self.__slaves.insert(0, self.__master)
+                self.__master = c
+
+        self.focused_client.focus()
+        self.update()
 
     def layup_client(self):
         if self.focused_client is None or not self.focused_client.tiled:
             return
 
         if len(self.__slaves) == 0:
-            return 
+            return
 
-        print "layup not implemented"
+        last_sl = len(self.__slaves) - 1
+
+        if self.focused_client == self.__master:
+                c = self.__slaves.pop(0)
+                self.__slaves.append(self.__master)
+                self.__master = c
+        else:
+            for n in range(len(self.__slaves)):
+                if self.__slaves[n] == self.focused_client:
+                    break
+
+            nn = (n-1)%len(self.__slaves)
+            if nn != last_sl:
+                self.__slaves[n], self.__slaves[nn] = self.__slaves[nn], self.__slaves[n]
+            else:
+                self.__master, self.__slaves[n] = self.__slaves[n], self.__master
+
+        self.focused_client.focus()
+        self.update()
 
     def update_focus(self, client):
         if self.focused_client is not None:
