@@ -492,14 +492,22 @@ class Geometry:
         self.h = h
         self.b = b
 
+    def copy(self):
+        return Geometry(self.x, self.y, self.w, self.h, self.b)
+
 class Client:
-    def __init__(self, window, parent, workspace):
+    def __init__(self, window, parent, workspace, geometry=None):
         self.id = window
         self.parent = parent
         self.__min_w = 20
         self.__min_h = 20
-        self.geo_virt = Geometry(0,0, self.__min_w, self.__min_w, 1)
-        self.geo_want = Geometry(0,0, self.__min_w, self.__min_w, 1)
+        if geometry is None:
+            self.geo_virt = Geometry(0,0, self.__min_w, self.__min_w, 1)
+            self.geo_want = Geometry(0,0, self.__min_w, self.__min_w, 1)
+        else:
+            self.geo_virt = geometry.copy()
+            self.geo_want = geometry.copy()
+
         self.geo_unmax = None
         self.border_color = Screen.passive_color
         self.workspace = workspace
@@ -733,13 +741,14 @@ def acquire_ext_clients(viewport):
         if wa.map_state == MapState.Unmapped or wa.override_redirect:
             continue
         geo = con.core.GetGeometry(cid).reply()
-        clients.append((cid, geo.x, geo.y))
+        clients.append((cid, geo.x, geo.y, geo.width, geo.height, geo.border_width))
     return clients
 
 def add_ext_clients(ext_clients):
-    for cid,x,y in ext_clients:
-        wk = get_screen_at(Geometry(x, y)).active_workspace
-        cl = Client(cid, viewport.root, wk)
+    for cid,x,y,w,h,b in ext_clients:
+        gm = Geometry(x, y, w, h, b)
+        wk = get_screen_at(gm).active_workspace
+        cl = Client(cid, viewport.root, wk, gm)
         _clients[cid] = cl
         wk.add(cl)
         sys.stderr.write("acquired client %d\n" % cid)
