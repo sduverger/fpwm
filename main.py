@@ -244,6 +244,7 @@ class Workspace:
             self.__layouts[self.current_layout].update(self.__master, self.__slaves)
 
         for c in self.__floating:
+            c.real_configure_notify()
             c.stack_above()
 
     def map(self, client):
@@ -755,13 +756,15 @@ def add_ext_clients(ext_clients):
     for cid,x,y,w,h,b in ext_clients:
         lost_client = False
         gm = Geometry(x, y, w, h, b)
-        sys.stderr.write("ext client at x %d y %d\n" % (x,y))
+        sys.stderr.write("ext client at x %d y %d w %d h %d b %d\n" % (x,y,w,h,b))
 
         sc = get_screen_at(gm)
         if sc is None:
             lost_client = True
             gm.x = 0
             gm.y = 0
+            gm.w = 320
+            gm.h = 240
             sc = get_screen_at(gm)
 
         wk = sc.active_workspace
@@ -771,7 +774,7 @@ def add_ext_clients(ext_clients):
 
         if lost_client:
             cl.real_configure_notify()
-        sys.stderr.write("acquired client %d\n" % cid)
+        sys.stderr.write("acquired client 0x%x\n" % cid)
 
 def release_clients(viewport):
     for c in _clients:
@@ -789,7 +792,8 @@ def event_enter_notify(event):
 
     cl = _clients.get(event.event)
     if cl is not None:
-        set_current_screen_from(cl.workspace.screen)
+        if not set_current_screen_from(cl.workspace.screen):
+            sys.stderr.write("enter notify with client on workspace %s as None screen\n" % cl.workspace.name)
     else:
         set_current_screen_at(Geometry(event.root_x, event.root_y))
 
@@ -997,12 +1001,23 @@ def set_current_screen_at(geo):
     if ns != focused_screen:
         focused_screen = ns
         update_workspace_info()
+    else:
+        sys.stderr.write("ignore set_screen_at()\n")
 
 def set_current_screen_from(screen):
     global focused_screen
+
+    if screen is None:
+        sys.stderr.write("trying to set_screen_from(None)\n")
+        return False
+
     if screen != focused_screen:
         focused_screen = screen
         update_workspace_info()
+    else:
+        sys.stderr.write("ignore set_screen_from()\n")
+
+    return True
 
 def current_screen():
     return focused_screen
@@ -1096,13 +1111,14 @@ def get_prev_workspace_with(wk):
     return get_workspace_with(wk, -1)
 
 def send_to_workspace_with(nwk):
-    sys.stderr.write("send_to_workspace\n")
     c = current_client()
     if nwk is None or c is None:
         return
 
     cwk = c.workspace
     tiled = c.tiled
+
+    sys.stderr.write("send_to_workspace %s -> %s\n" % (cwk.name, nwk.name))
 
     cwk.detach(c, False)
     nwk.attach(c)
@@ -1115,7 +1131,8 @@ def send_to_workspace_with(nwk):
 
     if tiled:
         nwk.tile(c, update)
-    else:
+    elif update:
+        c.real_configure_notify()
         c.stack_above()
 
 def send_to_workspace(n):
@@ -1130,9 +1147,10 @@ def send_to_prev_workspace():
     send_to_workspace_with(get_prev_workspace_with(current_workspace()))
 
 def goto_workspace(n):
-    wk = get_workspace_at(n)
-    if wk is not None and wk != current_workspace() and wk.screen is None:
-        current_screen().set_workspace(wk)
+    nwk = get_workspace_at(n)
+    if nwk is not None and nwk != current_workspace() and nwk.screen is None:
+        sys.stderr.write("goto_workspace %s -> %s\n" % (current_workspace().name, nwk.name))
+        current_screen().set_workspace(nwk)
 
 def next_workspace():
     nwk = get_next_workspace_with(current_workspace())
