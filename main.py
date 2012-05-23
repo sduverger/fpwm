@@ -64,7 +64,7 @@ def ChangeProperty(core, mode, window, property, type, format, data_len, data):
 
 
 #
-# Gap
+# Gap ()
 #
 class Gap():
     def __init__(self, x=0, y=0, w=0, h=0, top=True):
@@ -118,7 +118,6 @@ class Screen:
         self.active_workspace = workspace
         self.active_workspace.set_active(self)
         update_workspace_info()
-
 #
 # Layout
 #
@@ -637,8 +636,8 @@ class Client:
         self.geo_unmax = self.relative_geometry()
         self.geo_virt.x = 0
         self.geo_virt.y = 0
-        self.geo_virt.w = self.workspace.screen.width
-        self.geo_virt.h = self.workspace.screen.height
+        self.geo_virt.w = self.workspace.screen.width - 2*self.geo_virt.b
+        self.geo_virt.h = self.workspace.screen.height - 2*self.geo_virt.b
         self.stack_above()
 
     def unmaximize(self):
