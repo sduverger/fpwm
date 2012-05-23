@@ -251,7 +251,7 @@ class Workspace:
             self.__tile(client)
         client.map()
 
-    def __tile(self, client):
+    def __tile(self, client, update=True):
         client.tile()
         self.__floating.remove(client)
 
@@ -259,9 +259,10 @@ class Workspace:
             self.__slaves.insert(0,self.__master)
 
         self.__master = client
-        self.update()
+        if update:
+            self.update()
 
-    def __untile(self, client):
+    def __untile(self, client, update=True):
         client.untile()
         self.__floating.append(client)
 
@@ -273,20 +274,21 @@ class Workspace:
         else:
             self.__slaves.remove(client)
 
-        self.update()
+        if update:
+            self.update()
 
-    def untile(self, client):
+    def untile(self, client, update=True):
         if not client.tiled:
             return
-        self.__untile(client)
+        self.__untile(client, update)
 
-    def tile(self, client):
+    def tile(self, client, update=True):
         if client.tiled:
             return
-        self.__tile(client)
+        self.__tile(client, update)
 
-    def detach(self, client):
-        self.untile(client)
+    def detach(self, client, update=True):
+        self.untile(client, update)
         client.detach()
         self.remove(client)
 
@@ -442,8 +444,13 @@ class Workspace:
     def update_focus(self, client):
         if self.focused_client is not None:
             self.focused_client.unfocus()
+
         self.focused_client = client
-        self.focused_client.focus()
+
+        if client is not None:
+            self.focused_client.focus()
+        else:
+            con.core.SetInputFocus(InputFocus.PointerRoot, self.screen.root, InputFocus._None)
 
     def reparent(self, who):
         for c in self.__clients.itervalues():
@@ -520,7 +527,7 @@ class Client:
         con.core.ChangeWindowAttributes(self.id, CW.EventMask, [mask])
 
     def relative_geometry(self):
-        return Geometry(self.geo_virt.x, self.geo_virt.y, self.geo_virt.w, self.geo_virt.h)
+        return self.geo_virt.copy()
 
     def absolute_geometry(self):
         return Geometry(self.geo_virt.x+self.workspace.screen.x, self.geo_virt.y+self.workspace.screen.y)
@@ -746,11 +753,24 @@ def acquire_ext_clients(viewport):
 
 def add_ext_clients(ext_clients):
     for cid,x,y,w,h,b in ext_clients:
+        lost_client = False
         gm = Geometry(x, y, w, h, b)
-        wk = get_screen_at(gm).active_workspace
+        sys.stderr.write("ext client at x %d y %d\n" % (x,y))
+
+        sc = get_screen_at(gm)
+        if sc is None:
+            lost_client = True
+            gm.x = 0
+            gm.y = 0
+            sc = get_screen_at(gm)
+
+        wk = sc.active_workspace
         cl = Client(cid, viewport.root, wk, gm)
         _clients[cid] = cl
         wk.add(cl)
+
+        if lost_client:
+            cl.real_configure_notify()
         sys.stderr.write("acquired client %d\n" % cid)
 
 def release_clients(viewport):
@@ -761,7 +781,7 @@ def release_clients(viewport):
 # Events
 #
 def event_enter_notify(event):
-    sys.stderr.write("enter notify: %r\n" % event.__dict__)
+    sys.stderr.write("enter notify 0x%x: %r\n" % (event.event, event.__dict__))
     global _ignore_next_enter_notify
     if _ignore_next_enter_notify:
         _ignore_next_enter_notify = False
@@ -769,11 +789,11 @@ def event_enter_notify(event):
 
     cl = _clients.get(event.event)
     if cl is not None:
-        wk = cl.workspace
-        set_current_screen_from(wk.screen)
-        wk.update_focus(cl)
+        set_current_screen_from(cl.workspace.screen)
     else:
         set_current_screen_at(Geometry(event.root_x, event.root_y))
+
+    current_workspace().update_focus(cl)
 
 def event_configure_window_request(event):
     wk = current_workspace()
@@ -843,11 +863,11 @@ event_handlers = { EnterNotifyEvent:event_enter_notify,
 
 def event_handler(event):
     hdl = event_handlers.get(event.__class__, None)
-    if hdl is None:
-        sys.stderr.write("** Unhandled event ** %r %r\n" % (event.__class__.__name__, event.__dict__))
-    else:
+    if hdl is not None:
         sys.stderr.write("--> %s\n" % event.__class__.__name__)
         hdl(event)
+    # else:
+    #     sys.stderr.write("** Unhandled event ** %r %r\n" % (event.__class__.__name__, event.__dict__))
 
 #
 # Keyboard
@@ -871,11 +891,11 @@ class Keyboard:
         con.core.UngrabKey(False, current_client_id(), ModMask.Any)
 
     def press(self, event):
-        sys.stderr.write("key press: %r\n" % event.__dict__)
+        sys.stderr.write("key press 0x%x: %r\n" % (event.child, event.__dict__))
         self.__bindings[event.detail][event.state]()
 
     def release(self, event):
-        sys.stderr.write("key release: %r\n" % event.__dict__)
+        sys.stderr.write("key release 0x%x: %r\n" % (event.child, event.__dict__))
 
 #
 # Mouse
@@ -920,7 +940,7 @@ class Mouse:
         self.__y = event.event_y
 
     def press(self, event):
-        sys.stderr.write("button press: %r\n" % event.__dict__)
+        sys.stderr.write("button press 0x%x: %r\n" % (event.child, event.__dict__))
         if self.__acting is not None or event.child == 0:
             return
 
@@ -945,7 +965,7 @@ class Mouse:
             self.__up = False
 
     def release(self, event):
-        sys.stderr.write("button release: %r\n" % event.__dict__)
+        sys.stderr.write("button release 0x%x: %r\n" % (event.child, event.__dict__))
         set_current_screen_at(Geometry(event.root_x, event.root_y))
 
         if self.__acting is None:
@@ -975,20 +995,20 @@ def set_current_screen_at(geo):
     global focused_screen
     ns = get_screen_at(geo)
     if ns != focused_screen:
+        focused_screen = ns
         update_workspace_info()
-    focused_screen = ns
 
 def set_current_screen_from(screen):
     global focused_screen
     if screen != focused_screen:
+        focused_screen = screen
         update_workspace_info()
-    focused_screen = screen
 
 def current_screen():
     return focused_screen
 
 def update_workspace_info():
-    aw  = current_screen().active_workspace
+    aw  = current_workspace()
     vwn = []
     hwn = []
     for w in _workspaces:
@@ -1076,6 +1096,7 @@ def get_prev_workspace_with(wk):
     return get_workspace_with(wk, -1)
 
 def send_to_workspace_with(nwk):
+    sys.stderr.write("send_to_workspace\n")
     c = current_client()
     if nwk is None or c is None:
         return
@@ -1083,19 +1104,19 @@ def send_to_workspace_with(nwk):
     cwk = c.workspace
     tiled = c.tiled
 
-    cwk.detach(c)
+    cwk.detach(c, False)
     nwk.attach(c)
 
-    if tiled:
-        nwk.tile(c)
-
     if nwk.screen is None:
-        root = nwk.vroot
+        c.reparent(nwk.vroot)
+        update = False
     else:
-        root = nwk.screen.root
-        c.stack_above()
+        update = True
 
-    c.reparent(root)
+    if tiled:
+        nwk.tile(c, update)
+    else:
+        c.stack_above()
 
 def send_to_workspace(n):
     wk = get_workspace_at(n)
@@ -1116,11 +1137,13 @@ def goto_workspace(n):
 def next_workspace():
     nwk = get_next_workspace_with(current_workspace())
     if nwk is not None:
+        sys.stderr.write("next_workspace %s -> %s\n" % (current_workspace().name, nwk.name))
         current_screen().set_workspace(nwk)
 
 def prev_workspace():
     nwk = get_prev_workspace_with(current_workspace())
     if nwk is not None:
+        sys.stderr.write("prev_workspace %s -> %s\n" % (current_workspace().name, nwk.name))
         current_screen().set_workspace(nwk)
 
 def next_client():
@@ -1202,10 +1225,10 @@ keyboard_bindings = [ (KeyMap.mod_alt, KeyMap.space, next_layout),
                       (KeyMap.mod_alt, KeyMap.n3, lambda: goto_workspace(2)),
                       (KeyMap.mod_alt, KeyMap.n4, lambda: goto_workspace(3)),
 
-                      (KeyMap.mod_alt|KeyMap.mod_shift, KeyMap.n1, lambda: send_to_workspace(0)),
-                      (KeyMap.mod_alt|KeyMap.mod_shift, KeyMap.n2, lambda: send_to_workspace(1)),
-                      (KeyMap.mod_alt|KeyMap.mod_shift, KeyMap.n3, lambda: send_to_workspace(2)),
-                      (KeyMap.mod_alt|KeyMap.mod_shift, KeyMap.n4, lambda: send_to_workspace(3)),
+                      (KeyMap.mod_alt|KeyMap.mod_shift, KeyMap.n1, lambda: (send_to_workspace(0),goto_workspace(0))),
+                      (KeyMap.mod_alt|KeyMap.mod_shift, KeyMap.n2, lambda: (send_to_workspace(1),goto_workspace(1))),
+                      (KeyMap.mod_alt|KeyMap.mod_shift, KeyMap.n3, lambda: (send_to_workspace(2),goto_workspace(2))),
+                      (KeyMap.mod_alt|KeyMap.mod_shift, KeyMap.n4, lambda: (send_to_workspace(3),goto_workspace(3))),
 
                       (KeyMap.mod_alt, KeyMap.s, lambda:spawn("/usr/bin/xterm","-fg","lightgreen","-bg","black")),
                       (KeyMap.mod_alt, KeyMap.r, lambda:spawn("/usr/bin/gmrun")),
@@ -1277,13 +1300,14 @@ w = 0
 screen_ids = unpack_from("%dI" % reply.num_crtcs, reply.crtcs.buf())
 for sid in screen_ids:
     reply = xrandr.GetCrtcInfo(sid,0).reply()
+    if reply.width == 0 or reply.height == 0:
+        continue
     if status_line is not None and reply.x == status_line.x and reply.y == status_line.y:
         gap = status_line
     else:
         gap = None
     scr = Screen(viewport, reply.x, reply.y, reply.width, reply.height, _workspaces, gap)
-    if reply.x == 0 and reply.y == 0:
-        focused_screen = scr
+    focused_screen = scr
     scr.set_workspace(_workspaces[w])
     _screens.append(scr)
     w += 1
@@ -1301,12 +1325,16 @@ mouse.attach(mouse_bindings)
 while True:
     try:
         event = con.wait_for_event()
-        event_handler(event)
-        con.flush()
     except Exception, error:
         sys.stderr.write("panic: %s\n" % error.__class__.__name__)
-        mouse.detach()
-        keyboard.detach()
-        release_clients(viewport)
         con.disconnect()
         sys.exit(1)
+
+    event_handler(event)
+    con.flush()
+
+# mouse.detach()
+# keyboard.detach()
+# release_clients(viewport)
+sys.stderr.write("exiting\n")
+con.disconnect()
