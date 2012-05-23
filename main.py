@@ -1159,6 +1159,7 @@ class KeyMap:
     d              = 40
     f              = 41
     s              = 39
+    r              = 27
     n1             = 10
     n2             = 11
     n3             = 12
@@ -1206,7 +1207,8 @@ keyboard_bindings = [ (KeyMap.mod_alt, KeyMap.space, next_layout),
                       (KeyMap.mod_alt|KeyMap.mod_shift, KeyMap.n3, lambda: send_to_workspace(2)),
                       (KeyMap.mod_alt|KeyMap.mod_shift, KeyMap.n4, lambda: send_to_workspace(3)),
 
-                      (KeyMap.mod_alt, KeyMap.s, lambda:spawn("/usr/bin/xterm","-bg","lightgreen")),
+                      (KeyMap.mod_alt, KeyMap.s, lambda:spawn("/usr/bin/xterm","-fg","lightgreen","-bg","black")),
+                      (KeyMap.mod_alt, KeyMap.r, lambda:spawn("/usr/bin/gmrun")),
                       ]
 
 mouse_bindings    = [ (KeyMap.mod_alt, 1, move_client),
