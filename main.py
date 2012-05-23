@@ -1277,7 +1277,7 @@ w = 0
 screen_ids = unpack_from("%dI" % reply.num_crtcs, reply.crtcs.buf())
 for sid in screen_ids:
     reply = xrandr.GetCrtcInfo(sid,0).reply()
-    if reply.x == status_line.x and reply.y == status_line.y:
+    if status_line is not None and reply.x == status_line.x and reply.y == status_line.y:
         gap = status_line
     else:
         gap = None
