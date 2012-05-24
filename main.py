@@ -124,6 +124,7 @@ class Screen:
 class LayoutTall:
     def __init__(self, workspace, master_mapper, slaves_mapper):
         self.workspace = workspace
+        self.ratio = 0.5
         self.__master_mapper = master_mapper
         self.__slaves_mapper = slaves_mapper
 
@@ -132,6 +133,16 @@ class LayoutTall:
             return
         if self.__master_mapper(master, slaves):
             self.__slaves_mapper(slaves)
+
+    def increase(self, stp):
+        self.ratio += stp
+        if self.ratio > (1.0 - stp):
+            self.ratio = 1.0 - stp
+
+    def decrease(self, stp):
+        self.ratio -= stp
+        if self.ratio < stp:
+            self.ratio = stp
 
 class LayoutVTall(LayoutTall):
     def __init__(self, workspace):
@@ -147,7 +158,7 @@ class LayoutVTall(LayoutTall):
             master.geo_virt.w = self.workspace.screen.width - 2*master.geo_virt.b
             do_slaves = False
         else:
-            master.geo_virt.w = self.workspace.screen.width/2 - 2*master.geo_virt.b
+            master.geo_virt.w = self.workspace.screen.width*self.ratio - 2*master.geo_virt.b
             do_slaves = True
 
         master.real_configure_notify()
@@ -159,9 +170,9 @@ class LayoutVTall(LayoutTall):
             H = self.workspace.screen.height/L
             for i in range(L):
                 c = slaves[i]
-                c.geo_virt.x = self.workspace.screen.width/2
+                c.geo_virt.x = self.workspace.screen.width*self.ratio
                 c.geo_virt.y = i*H
-                c.geo_virt.w = self.workspace.screen.width/2 - 2*c.geo_virt.b
+                c.geo_virt.w = self.workspace.screen.width*(1.0 - self.ratio) - 2*c.geo_virt.b
                 c.geo_virt.h = H - 2*c.geo_virt.b
                 c.real_configure_notify()
 
@@ -179,7 +190,7 @@ class LayoutHTall(LayoutTall):
             master.geo_virt.h = self.workspace.screen.height - 2*master.geo_virt.b
             do_slaves = False
         else:
-            master.geo_virt.h = self.workspace.screen.height/2 - 2*master.geo_virt.b
+            master.geo_virt.h = self.workspace.screen.height*self.ratio - 2*master.geo_virt.b
             do_slaves = True
 
         master.real_configure_notify()
@@ -191,9 +202,9 @@ class LayoutHTall(LayoutTall):
             W = self.workspace.screen.width/L
             for i in range(L):
                 c = slaves[i]
-                c.geo_virt.y = self.workspace.screen.height/2
+                c.geo_virt.y = self.workspace.screen.height*self.ratio
                 c.geo_virt.x = i*W
-                c.geo_virt.h = self.workspace.screen.height/2 - 2*c.geo_virt.b
+                c.geo_virt.h = self.workspace.screen.height*(1.0 - self.ratio) - 2*c.geo_virt.b
                 c.geo_virt.w = W - (2*c.geo_virt.b)
                 c.real_configure_notify()
 
@@ -209,7 +220,7 @@ class Workspace:
         self.__slaves = []
         self.__floating = []
         self.__layouts = [LayoutVTall(self), LayoutHTall(self)]
-        self.current_layout = 0
+        self.__current_layout = 0
         self.focused_client = None
         self.__toggle_desktop = False
 
@@ -236,12 +247,15 @@ class Workspace:
     def get_client(self, id):
         return self.__clients.get(id, None)
 
+    def current_layout(self):
+        return self.__layouts[self.__current_layout]
+
     def update(self):
         if self.screen is None:
             return
 
         if self.__master != None:
-            self.__layouts[self.current_layout].update(self.__master, self.__slaves)
+            self.__layouts[self.__current_layout].update(self.__master, self.__slaves)
 
         for c in self.__floating:
             c.real_configure_notify()
@@ -472,7 +486,7 @@ class Workspace:
         if self.screen is None:
             return
 
-        self.current_layout = (self.current_layout+1)%len(self.__layouts)
+        self.__current_layout = (self.__current_layout+1)%len(self.__layouts)
         self.update()
 
     def toggle_desktop(self):
@@ -1176,6 +1190,16 @@ def layup_client():
 def laydown_client():
     current_workspace().laydown_client()
 
+def increase_layout(stp):
+    wk = current_workspace()
+    wk.current_layout().increase(stp)
+    wk.update()
+
+def decrease_layout(stp):
+    wk = current_workspace()
+    wk.current_layout().decrease(stp)
+    wk.update()
+
 def spawn(*args):
     child = os.fork()
     if child != 0:
@@ -1201,6 +1225,8 @@ class KeyMap:
     f              = 41
     s              = 39
     r              = 27
+    l              = 46
+    h              = 43
     n1             = 10
     n2             = 11
     n3             = 12
@@ -1247,6 +1273,9 @@ keyboard_bindings = [ (KeyMap.mod_alt, KeyMap.space, next_layout),
                       (KeyMap.mod_alt|KeyMap.mod_shift, KeyMap.n2, lambda: (send_to_workspace(1),goto_workspace(1))),
                       (KeyMap.mod_alt|KeyMap.mod_shift, KeyMap.n3, lambda: (send_to_workspace(2),goto_workspace(2))),
                       (KeyMap.mod_alt|KeyMap.mod_shift, KeyMap.n4, lambda: (send_to_workspace(3),goto_workspace(3))),
+
+                      (KeyMap.mod_alt, KeyMap.l, lambda: increase_layout(0.05)),
+                      (KeyMap.mod_alt, KeyMap.h, lambda: decrease_layout(0.05)),
 
                       (KeyMap.mod_alt, KeyMap.s, lambda:spawn("/usr/bin/xterm","-fg","lightgreen","-bg","black")),
                       (KeyMap.mod_alt, KeyMap.r, lambda:spawn("/usr/bin/gmrun")),
