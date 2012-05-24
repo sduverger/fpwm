@@ -65,15 +65,22 @@ def ChangeProperty(core, mode, window, property, type, format, data_len, data):
 
 
 #
-# Gap ()
+# Status Line
 #
 class Gap():
-    def __init__(self, x=0, y=0, w=0, h=0, top=True):
+    def __init__(self, x=0, y=0, h=0, top=True):
         self.x = x
         self.y = y
-        self.w = w
         self.h = h
         self.top = top
+
+class StatusLine():
+    def __init__(self, pprint, gap):
+        self.gap = gap
+        self.pprint = pprint
+
+    def update(self, aw, vw, hw):
+        self.pprint(aw, vw, hw)
 
 #
 # Screen
@@ -123,9 +130,10 @@ class Screen:
 # Layout
 #
 class LayoutTall:
-    def __init__(self, workspace, master_mapper, slaves_mapper):
+    def __init__(self, workspace, master_mapper, slaves_mapper, name):
         self.workspace = workspace
         self.ratio = Decimal(0.5)
+        self.name = name
         self.__master_mapper = master_mapper
         self.__slaves_mapper = slaves_mapper
 
@@ -147,7 +155,7 @@ class LayoutTall:
 
 class LayoutVTall(LayoutTall):
     def __init__(self, workspace):
-        LayoutTall.__init__(self, workspace, self.__map_master, self.__map_slaves)
+        LayoutTall.__init__(self, workspace, self.__map_master, self.__map_slaves, "vTall")
 
     def __map_master(self, master, slaves):
         master.geo_virt.b = 1
@@ -179,7 +187,7 @@ class LayoutVTall(LayoutTall):
 
 class LayoutHTall(LayoutTall):
     def __init__(self, workspace):
-        LayoutTall.__init__(self, workspace, self.__map_master, self.__map_slaves)
+        LayoutTall.__init__(self, workspace, self.__map_master, self.__map_slaves, "hTall")
 
     def __map_master(self, master, slaves):
         master.geo_virt.b = 1
@@ -489,6 +497,7 @@ class Workspace:
 
         self.__current_layout = (self.__current_layout+1)%len(self.__layouts)
         self.update()
+        update_workspace_info()
 
     def toggle_desktop(self):
         if self.screen is None or len(self.__clients) == 0:
@@ -1037,17 +1046,15 @@ def current_screen():
 
 def update_workspace_info():
     aw  = current_workspace()
-    vwn = []
-    hwn = []
+    vw = []
+    hw = []
     for w in _workspaces:
         if w.screen is None:
-            hwn.append(w.name)
+            hw.append(w)
         elif w != aw:
-            vwn.append(w.name)
+            vw.append(w)
 
-    # active visible,... hidden,...
-    sys.stdout.write("%s %s %s\n" % (aw.name,",".join(vwn),",".join(hwn)))
-    sys.stdout.flush()
+    status_line.update(aw, vw, hw)
 
 def current_workspace():
     return current_screen().active_workspace
@@ -1286,7 +1293,13 @@ mouse_bindings    = [ (KeyMap.mod_alt, 1, move_client),
                       (KeyMap.mod_alt, 3, resize_client),
                       ]
 
-status_line = Gap(h=18)
+def pretty_print(aw, vw, hw):
+    sys.stdout.write("> %s < :: %s [%s | %s]\n" % (aw.name, aw.current_layout().name,
+                                                   " ".join(map(lambda w: w.name,vw)),
+                                                   " ".join(map(lambda w: w.name, hw))))
+    sys.stdout.flush()
+
+status_line = StatusLine(pretty_print, Gap(h=18))
 
 # XXX: KeyButMask.Mod2 is always set (xpyb/Xephyr bug ?)
 # def xhephyr_fix(x):
@@ -1350,8 +1363,8 @@ for sid in screen_ids:
     reply = xrandr.GetCrtcInfo(sid,0).reply()
     if reply.width == 0 or reply.height == 0:
         continue
-    if status_line is not None and reply.x == status_line.x and reply.y == status_line.y:
-        gap = status_line
+    if status_line is not None and reply.x == status_line.gap.x:
+        gap = status_line.gap
     else:
         gap = None
     scr = Screen(viewport, reply.x, reply.y, reply.width, reply.height, _workspaces, gap)
