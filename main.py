@@ -1,67 +1,24 @@
 #!/usr/bin/env python
 
+#
+# TODO
+#
+# . extend _NET_WM support (_NET_VIRTUAL_ROOTS, _NET_WM_HINTS, ...)
+# . tasks / 2D workspaces
+# . restart/quit proper
+# . split code into a package
+# . debug function
+# . "ignored windows" list
+# . focus color out of Screen
+# . only color focus active workspace ?
+# . send InputFocus when Goto another visible workspace
+#
+
 import sys, os
 from   decimal import *
 import xcb
 from   xcb.xproto import *
 import xcb.randr
-
-wmname = "fpwm"
-
-atom_names = ["_NET_SUPPORTED",
-              "_NET_SUPPORTING_WM_CHECK",
-              # "_NET_STARTUP_ID",
-              # "_NET_CLIENT_LIST",
-              # "_NET_CLIENT_LIST_STACKING",
-              # "_NET_NUMBER_OF_DESKTOPS",
-              # "_NET_CURRENT_DESKTOP",
-              # "_NET_DESKTOP_NAMES",
-              # "_NET_ACTIVE_WINDOW",
-              # "_NET_DESKTOP_GEOMETRY",
-              # "_NET_CLOSE_WINDOW",
-              "_NET_WM_NAME",
-              # "_NET_WM_STRUT_PARTIAL",
-              # "_NET_WM_ICON_NAME",
-              # "_NET_WM_VISIBLE_ICON_NAME",
-              # "_NET_WM_DESKTOP",
-              # "_NET_WM_WINDOW_TYPE",
-              # "_NET_WM_WINDOW_TYPE_DESKTOP",
-              # "_NET_WM_WINDOW_TYPE_DOCK",
-              # "_NET_WM_WINDOW_TYPE_TOOLBAR",
-              # "_NET_WM_WINDOW_TYPE_MENU",
-              # "_NET_WM_WINDOW_TYPE_UTILITY",
-              # "_NET_WM_WINDOW_TYPE_SPLASH",
-              # "_NET_WM_WINDOW_TYPE_DIALOG",
-              # "_NET_WM_WINDOW_TYPE_DROPDOWN_MENU",
-              # "_NET_WM_WINDOW_TYPE_POPUP_MENU",
-              # "_NET_WM_WINDOW_TYPE_TOOLTIP",
-              # "_NET_WM_WINDOW_TYPE_NOTIFICATION",
-              # "_NET_WM_WINDOW_TYPE_COMBO",
-              # "_NET_WM_WINDOW_TYPE_DND",
-              # "_NET_WM_WINDOW_TYPE_NORMAL",
-              # "_NET_WM_ICON",
-              "_NET_WM_PID",
-              # "_NET_WM_STATE",
-              # "_NET_WM_STATE_STICKY",
-              # "_NET_WM_STATE_SKIP_TASKBAR",
-              # "_NET_WM_STATE_FULLSCREEN",
-              # "_NET_WM_STATE_MAXIMIZED_HORZ",
-              # "_NET_WM_STATE_MAXIMIZED_VERT",
-              # "_NET_WM_STATE_ABOVE",
-              # "_NET_WM_STATE_BELOW",
-              # "_NET_WM_STATE_MODAL",
-              # "_NET_WM_STATE_HIDDEN",
-              # "_NET_WM_STATE_DEMANDS_ATTENTION"
-              ]
-
-def Flat(format, data):
-    f={32:'I',16:'H',8:'B'}[format]
-    if not hasattr(data, "__iter__") and not hasattr(data, "__getitem__"):
-        data = [data]
-    return array(f, data).tostring()
-
-def ChangeProperty(core, mode, window, property, type, format, data_len, data):
-    core.ChangeProperty(mode, window, property, type, format, data_len, Flat(format, data))
 
 
 #
@@ -105,16 +62,6 @@ class Screen:
             self.height -= gap.h
             if gap.top:
                 self.y += gap.h
-
-        ChangeProperty(con.core, PropMode.Replace, self.root, atoms["_NET_SUPPORTED"], Atom.ATOM, 32, len(atoms), atoms.itervalues())
-
-        self.wm = con.generate_id()
-        con.core.CreateWindow(self.depth, self.wm, self.root, -1, -1, 1, 1, 0, WindowClass.CopyFromParent, self.visual, 0, [])
-
-        ChangeProperty(con.core, PropMode.Replace, self.root,  atoms["_NET_SUPPORTING_WM_CHECK"], Atom.WINDOW, 32, 1, self.wm)
-        ChangeProperty(con.core, PropMode.Replace, self.wm, atoms["_NET_SUPPORTING_WM_CHECK"], Atom.WINDOW, 32, 1, self.wm)
-        ChangeProperty(con.core, PropMode.Replace, self.wm, atoms["_NET_WM_NAME"], Atom.STRING, 8, len(wmname), wmname)
-        ChangeProperty(con.core, PropMode.Replace, self.wm, atoms["_NET_WM_PID"], Atom.CARDINAL, 32, 1, os.getpid())
 
     def set_workspace(self, workspace):
         if workspace.screen is not None:
@@ -743,70 +690,6 @@ class Client:
         return self.synthetic_configure_notify()
 
 #
-# Other clients
-#
-def vanilla_configure_window_request(event):
-    values = []
-    if event.value_mask & ConfigWindow.X:
-        values.append(event.x)
-    if event.value_mask & ConfigWindow.Y:
-        values.append(event.y)
-    if event.value_mask & ConfigWindow.Width:
-        values.append(event.width)
-    if event.value_mask & ConfigWindow.Height:
-        values.append(event.height)
-    if event.value_mask & ConfigWindow.BorderWidth:
-        values.append(event.border_width)
-    if event.value_mask & ConfigWindow.Sibling:
-        values.append(event.sibling)
-    if event.value_mask & ConfigWindow.StackMode:
-        values.append(event.stack_mode)
-
-    con.core.ConfigureWindow(event.window, event.value_mask, values)
-
-def acquire_ext_clients(viewport):
-    clients = []
-    reply = con.core.QueryTree(viewport.root).reply()
-    if reply.children_len == 0:
-        return clients
-    children = unpack_from("%dI" % reply.children_len, reply.children.buf())
-    for cid in children:
-        wa = con.core.GetWindowAttributes(cid).reply()
-        if wa.map_state == MapState.Unmapped or wa.override_redirect:
-            continue
-        geo = con.core.GetGeometry(cid).reply()
-        clients.append((cid, geo.x, geo.y, geo.width, geo.height, geo.border_width))
-    return clients
-
-def add_ext_clients(ext_clients):
-    for cid,x,y,w,h,b in ext_clients:
-        lost_client = False
-        gm = Geometry(x, y, w, h, b)
-        sys.stderr.write("ext client at x %d y %d w %d h %d b %d\n" % (x,y,w,h,b))
-
-        sc = get_screen_at(gm)
-        if sc is None:
-            lost_client = True
-            gm.x = 0
-            gm.y = 0
-            gm.w = 320
-            gm.h = 240
-            sc = get_screen_at(gm)
-
-        wk = sc.active_workspace
-        cl = Client(cid, viewport.root, wk, gm)
-        _clients[cid] = cl
-        wk.add(cl)
-
-        if lost_client:
-            cl.real_configure_notify()
-        sys.stderr.write("acquired client 0x%x\n" % cid)
-
-def release_clients(viewport):
-    for c in _clients:
-        c.release(viewport.root)
-
-#
 # Events
 #
 def event_enter_notify(event):
@@ -1013,9 +896,81 @@ class Mouse:
 
         self.__acting = None
 
-
 #
 # Services
+#
+def vanilla_configure_window_request(event):
+    values = []
+    if event.value_mask & ConfigWindow.X:
+        values.append(event.x)
+    if event.value_mask & ConfigWindow.Y:
+        values.append(event.y)
+    if event.value_mask & ConfigWindow.Width:
+        values.append(event.width)
+    if event.value_mask & ConfigWindow.Height:
+        values.append(event.height)
+    if event.value_mask & ConfigWindow.BorderWidth:
+        values.append(event.border_width)
+    if event.value_mask & ConfigWindow.Sibling:
+        values.append(event.sibling)
+    if event.value_mask & ConfigWindow.StackMode:
+        values.append(event.stack_mode)
+
+    con.core.ConfigureWindow(event.window, event.value_mask, values)
+
+def acquire_ext_clients(viewport):
+    clients = []
+    reply = con.core.QueryTree(viewport.root).reply()
+    if reply.children_len == 0:
+        return clients
+    children = unpack_from("%dI" % reply.children_len, reply.children.buf())
+    for cid in children:
+        wa = con.core.GetWindowAttributes(cid).reply()
+        if wa.map_state == MapState.Unmapped or wa.override_redirect:
+            continue
+        geo = con.core.GetGeometry(cid).reply()
+        clients.append((cid, geo.x, geo.y, geo.width, geo.height, geo.border_width))
+    return clients
+
+def add_ext_clients(ext_clients):
+    for cid,x,y,w,h,b in ext_clients:
+        lost_client = False
+        gm = Geometry(x, y, w, h, b)
+        sys.stderr.write("ext client at x %d y %d w %d h %d b %d\n" % (x,y,w,h,b))
+
+        sc = get_screen_at(gm)
+        if sc is None:
+            lost_client = True
+            gm.x = 0
+            gm.y = 0
+            gm.w = 320
+            gm.h = 240
+            sc = get_screen_at(gm)
+
+        wk = sc.active_workspace
+        cl = Client(cid, viewport.root, wk, gm)
+        _clients[cid] = cl
+        wk.add(cl)
+
+        if lost_client:
+            cl.real_configure_notify()
+        sys.stderr.write("acquired client 0x%x\n" % cid)
+
+def release_clients(viewport):
+    for c in _clients:
+        c.release(viewport.root)
+
+def Flat(format, data):
+    f={32:'I',16:'H',8:'B'}[format]
+    if not hasattr(data, "__iter__") and not hasattr(data, "__getitem__"):
+        data = [data]
+    return array(f, data).tostring()
+
+def ChangeProperty(core, mode, window, property, type, format, data_len, data):
+    core.ChangeProperty(mode, window, property, type, format, data_len, Flat(format, data))
+
+#
+# WM API
 #
 def get_screen_at(geo):
     for s in _screens:
@@ -1313,24 +1268,14 @@ status_line = StatusLine(pretty_print, Gap(h=18))
 #
 # Main
 #
-# TODO:
-# . extend _NET_WM support (_NET_VIRTUAL_ROOTS, _NET_WM_HINTS, ...)
-# . tasks / 2D workspaces
-# . restart/quit proper
-# . remove root/wm windows NET_WM actions on Screen.__init__ and do it only once
-# . split code into a package
-# . debug function
-# . "ignored windows" list
-# . focus color out of Screen
-# . only color focus active workspace ?
-# . send InputFocus when Goto another visible workspace
-#
 keyboard = Keyboard()
 mouse = Mouse()
 _screens = []
 _workspaces = []
 _clients = {}
 _ignore_next_enter_notify = False
+
+wmname = "fpwm"
 
 con = xcb.connect()
 setup = con.get_setup()
@@ -1357,11 +1302,32 @@ if len(workspaces) < reply.num_crtcs:
     con.disconnect()
     sys.exit(1)
 
+atom_names = ["_NET_SUPPORTED", "_NET_SUPPORTING_WM_CHECK", "_NET_WM_NAME", "_NET_WM_PID"]
+# "_NET_STARTUP_ID", "_NET_CLIENT_LIST", "_NET_CLIENT_LIST_STACKING", "_NET_NUMBER_OF_DESKTOPS",
+# "_NET_CURRENT_DESKTOP", "_NET_DESKTOP_NAMES", "_NET_ACTIVE_WINDOW", "_NET_DESKTOP_GEOMETRY",
+# "_NET_CLOSE_WINDOW", "_NET_WM_STRUT_PARTIAL", "_NET_WM_ICON_NAME", "_NET_WM_VISIBLE_ICON_NAME",
+# "_NET_WM_DESKTOP", "_NET_WM_WINDOW_TYPE", "_NET_WM_WINDOW_TYPE_DESKTOP", "_NET_WM_WINDOW_TYPE_DOCK",
+# "_NET_WM_WINDOW_TYPE_TOOLBAR", "_NET_WM_WINDOW_TYPE_MENU", "_NET_WM_WINDOW_TYPE_UTILITY",
+# "_NET_WM_WINDOW_TYPE_SPLASH", "_NET_WM_WINDOW_TYPE_DIALOG", "_NET_WM_WINDOW_TYPE_DROPDOWN_MENU",
+# "_NET_WM_WINDOW_TYPE_POPUP_MENU", "_NET_WM_WINDOW_TYPE_TOOLTIP", "_NET_WM_WINDOW_TYPE_NOTIFICATION",
+# "_NET_WM_WINDOW_TYPE_COMBO", "_NET_WM_WINDOW_TYPE_DND", "_NET_WM_WINDOW_TYPE_NORMAL", "_NET_WM_ICON",
+# "_NET_WM_STATE", "_NET_WM_STATE_STICKY", "_NET_WM_STATE_SKIP_TASKBAR", "_NET_WM_STATE_FULLSCREEN",
+# "_NET_WM_STATE_MAXIMIZED_HORZ", "_NET_WM_STATE_MAXIMIZED_VERT", "_NET_WM_STATE_ABOVE",
+# "_NET_WM_STATE_BELOW", "_NET_WM_STATE_MODAL", "_NET_WM_STATE_HIDDEN", "_NET_WM_STATE_DEMANDS_ATTENTION"
+
 atoms = {}
 for n in atom_names:
     atoms[n] = con.core.InternAtom(False, len(n), n)
 for n in atoms:
     atoms[n] = atoms[n].reply().atom
+
+ChangeProperty(con.core, PropMode.Replace, viewport.root, atoms["_NET_SUPPORTED"], Atom.ATOM, 32, len(atoms), atoms.itervalues())
+wm_win = con.generate_id()
+con.core.CreateWindow(viewport.root_depth,wm_win,viewport.root,-1,-1,1,1,0,WindowClass.CopyFromParent,viewport.root_visual,0,[])
+ChangeProperty(con.core, PropMode.Replace, viewport.root,  atoms["_NET_SUPPORTING_WM_CHECK"], Atom.WINDOW, 32, 1, wm_win)
+ChangeProperty(con.core, PropMode.Replace, wm_win, atoms["_NET_SUPPORTING_WM_CHECK"], Atom.WINDOW, 32, 1, wm_win)
+ChangeProperty(con.core, PropMode.Replace, wm_win, atoms["_NET_WM_NAME"], Atom.STRING, 8, len(wmname), wmname)
+ChangeProperty(con.core, PropMode.Replace, wm_win, atoms["_NET_WM_PID"], Atom.CARDINAL, 32, 1, os.getpid())
 
 for w in workspaces:
     _workspaces.append(Workspace(w, viewport))
