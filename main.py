@@ -1,6 +1,7 @@
 #!/usr/bin/env python
 
 import sys, os
+from   decimal import *
 import xcb
 from   xcb.xproto import *
 import xcb.randr
@@ -124,7 +125,7 @@ class Screen:
 class LayoutTall:
     def __init__(self, workspace, master_mapper, slaves_mapper):
         self.workspace = workspace
-        self.ratio = 0.5
+        self.ratio = Decimal(0.5)
         self.__master_mapper = master_mapper
         self.__slaves_mapper = slaves_mapper
 
@@ -135,14 +136,14 @@ class LayoutTall:
             self.__slaves_mapper(slaves)
 
     def increase(self, stp):
-        self.ratio += stp
-        if self.ratio > (1.0 - stp):
-            self.ratio = 1.0 - stp
+        stp = Decimal(stp)
+        if self.ratio < (Decimal(1.0) - stp):
+            self.ratio += stp
 
     def decrease(self, stp):
-        self.ratio -= stp
-        if self.ratio < stp:
-            self.ratio = stp
+        stp = Decimal(stp)
+        if self.ratio > stp:
+            self.ratio -= stp
 
 class LayoutVTall(LayoutTall):
     def __init__(self, workspace):
@@ -158,7 +159,7 @@ class LayoutVTall(LayoutTall):
             master.geo_virt.w = self.workspace.screen.width - 2*master.geo_virt.b
             do_slaves = False
         else:
-            master.geo_virt.w = self.workspace.screen.width*self.ratio - 2*master.geo_virt.b
+            master.geo_virt.w = int(Decimal(self.workspace.screen.width) * self.ratio) - 2*master.geo_virt.b
             do_slaves = True
 
         master.real_configure_notify()
@@ -170,9 +171,9 @@ class LayoutVTall(LayoutTall):
             H = self.workspace.screen.height/L
             for i in range(L):
                 c = slaves[i]
-                c.geo_virt.x = self.workspace.screen.width*self.ratio
+                c.geo_virt.x = int(Decimal(self.workspace.screen.width) * self.ratio)
                 c.geo_virt.y = i*H
-                c.geo_virt.w = self.workspace.screen.width*(1.0 - self.ratio) - 2*c.geo_virt.b
+                c.geo_virt.w = int(Decimal(self.workspace.screen.width) * (Decimal(1.0) - self.ratio)) - 2*c.geo_virt.b
                 c.geo_virt.h = H - 2*c.geo_virt.b
                 c.real_configure_notify()
 
@@ -190,7 +191,7 @@ class LayoutHTall(LayoutTall):
             master.geo_virt.h = self.workspace.screen.height - 2*master.geo_virt.b
             do_slaves = False
         else:
-            master.geo_virt.h = self.workspace.screen.height*self.ratio - 2*master.geo_virt.b
+            master.geo_virt.h = int(Decimal(self.workspace.screen.height) * self.ratio) - 2*master.geo_virt.b
             do_slaves = True
 
         master.real_configure_notify()
@@ -202,9 +203,9 @@ class LayoutHTall(LayoutTall):
             W = self.workspace.screen.width/L
             for i in range(L):
                 c = slaves[i]
-                c.geo_virt.y = self.workspace.screen.height*self.ratio
+                c.geo_virt.y = int(Decimal(self.workspace.screen.height) * self.ratio)
                 c.geo_virt.x = i*W
-                c.geo_virt.h = self.workspace.screen.height*(1.0 - self.ratio) - 2*c.geo_virt.b
+                c.geo_virt.h = int(Decimal(self.workspace.screen.height) * (Decimal(1.0) - self.ratio)) - 2*c.geo_virt.b
                 c.geo_virt.w = W - (2*c.geo_virt.b)
                 c.real_configure_notify()
 
