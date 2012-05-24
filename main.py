@@ -519,6 +519,8 @@ class Client:
         self.geo_unmax = None
         self.border_color = Screen.passive_color
         self.workspace = workspace
+        self.__detached = False
+        self.__bk_geo_abs = None
         self.tiled = False
         self.never_tiled = True
         self.__setup()
@@ -541,11 +543,17 @@ class Client:
         return False
 
     def detach(self):
-        geo_abs = self.absolute_geometry()
-        self.geo_virt.x = geo_abs.x - self.workspace.screen.x
-        self.geo_virt.y = geo_abs.y - self.workspace.screen.y
+        self.__detached = True
 
     def attach(self, workspace):
+        geo_abs = self.absolute_geometry()
+        if workspace.screen is not None:
+            self.geo_virt.x = geo_abs.x - workspace.screen.x
+            self.geo_virt.y = geo_abs.y - workspace.screen.y
+            self.__detached = False
+        else:
+            self.__bk_geo_abs = geo_abs
+
         self.workspace = workspace
 
     def move(self, dx, dy):
@@ -667,7 +675,14 @@ class Client:
             self.stack_below()
 
     def real_configure_notify(self):
-        geo_abs = self.absolute_geometry()
+        if self.__detached:
+            geo_abs = self.__bk_geo_abs
+            self.geo_virt.x = geo_abs.x - self.workspace.screen.x
+            self.geo_virt.y = geo_abs.y - self.workspace.screen.y
+            self.__detached = False
+        else:
+            geo_abs = self.absolute_geometry()
+
         mask = ConfigWindow.X|ConfigWindow.Y|ConfigWindow.Width|ConfigWindow.Height|ConfigWindow.BorderWidth
         sys.stderr.write("r_configure: x %d y %d w %d h %d\n" % (geo_abs.x, geo_abs.y, self.geo_virt.w, self.geo_virt.h))
         pkt = pack('=xx2xIH2xiiIII', self.id, mask, geo_abs.x, geo_abs.y,
@@ -1131,6 +1146,7 @@ def send_to_workspace_with(nwk):
 
     if tiled:
         nwk.tile(c, update)
+        c.stack_below()
     elif update:
         c.real_configure_notify()
         c.stack_above()
