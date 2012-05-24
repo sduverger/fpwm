@@ -548,9 +548,12 @@ class Client:
 
     def attach(self, workspace):
         if workspace.screen is not None and self.__detached:
+            sys.stderr.write("abs %d %d\n" % (self.__bk_geo_abs.x, self.__bk_geo_abs.y))
             self.geo_virt.x = self.__bk_geo_abs.x - workspace.screen.x
             self.geo_virt.y = self.__bk_geo_abs.y - workspace.screen.y
             self.__detached = False
+            sys.stderr.write("virt %d %d\n" % (self.geo_virt.x, self.geo_virt.y))
+            sys.stderr.write("scr  %d %d\n" % (self.workspace.screen.x, self.workspace.screen.y))
 
         self.workspace = workspace
 
@@ -1137,6 +1140,10 @@ def send_to_workspace_with(nwk):
     #     we might ignore next enter_notify ... or not
     #
     # 2 - send float to visible workspace does not work !
+    #     we teleport, this is not the same situation as move/resize
+    #     we need to compute when we leave not when we arrive
+    #
+    # 3 - we dont care of client.{detach/attach} calculus whe it's a tile
 
     cwk.detach(c, False)
     nwk.attach(c)
