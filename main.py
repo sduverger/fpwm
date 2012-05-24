@@ -252,7 +252,7 @@ class Workspace:
             self.__tile(client)
         client.map()
 
-    def __tile(self, client, update=True):
+    def __tile(self, client):
         client.tile()
         self.__floating.remove(client)
 
@@ -260,8 +260,7 @@ class Workspace:
             self.__slaves.insert(0,self.__master)
 
         self.__master = client
-        if update:
-            self.update()
+        self.update()
 
     def __untile(self, client, update=True):
         client.untile()
@@ -283,10 +282,10 @@ class Workspace:
             return
         self.__untile(client, update)
 
-    def tile(self, client, update=True):
+    def tile(self, client):
         if client.tiled:
             return
-        self.__tile(client, update)
+        self.__tile(client)
 
     def detach(self, client, update=True):
         self.untile(client, update)
@@ -449,8 +448,12 @@ class Workspace:
 
         if client is not None:
             self.focused_client.focus()
+            wid = self.focused_client.id
         else:
             con.core.SetInputFocus(InputFocus.PointerRoot, self.screen.root, InputFocus._None)
+            wid = self.screen.root
+
+        sys.stderr.write("focus_update 0x%x\n" % wid)
 
     def reparent(self, who):
         for c in self.__clients.itervalues():
@@ -668,7 +671,7 @@ class Client:
     def real_configure_notify(self):
         geo_abs = self.absolute_geometry()
         mask = ConfigWindow.X|ConfigWindow.Y|ConfigWindow.Width|ConfigWindow.Height|ConfigWindow.BorderWidth
-        sys.stderr.write("r_configure: x %d y %d w %d h %d\n" % (geo_abs.x, geo_abs.y, self.geo_virt.w, self.geo_virt.h))
+        sys.stderr.write("r_configure 0x%x: x %d y %d w %d h %d\n" % (self.id,geo_abs.x,geo_abs.y,self.geo_virt.w,self.geo_virt.h))
         pkt = pack('=xx2xIH2xiiIII', self.id, mask, geo_abs.x, geo_abs.y,
                    self.geo_virt.w, self.geo_virt.h, self.geo_virt.b)
         con.core.send_request(xcb.Request(pkt, 12, True, False), xcb.VoidCookie())
@@ -792,7 +795,8 @@ def event_enter_notify(event):
     cl = _clients.get(event.event)
     if cl is not None:
         if not set_current_screen_from(cl.workspace.screen):
-            sys.stderr.write("enter notify with client on workspace %s as None screen\n" % cl.workspace.name)
+            sys.stderr.write("no screen for client 0x%x on workspace %s\n" % (cl.id, cl.workspace.name))
+            return
     else:
         set_current_screen_at(Geometry(event.root_x, event.root_y))
 
@@ -1000,21 +1004,16 @@ def set_current_screen_at(geo):
     if ns != focused_screen:
         focused_screen = ns
         update_workspace_info()
-    else:
-        sys.stderr.write("ignore set_screen_at()\n")
 
 def set_current_screen_from(screen):
     global focused_screen
 
     if screen is None:
-        sys.stderr.write("trying to set_screen_from(None)\n")
         return False
 
     if screen != focused_screen:
         focused_screen = screen
         update_workspace_info()
-    else:
-        sys.stderr.write("ignore set_screen_from()\n")
 
     return True
 
@@ -1119,7 +1118,7 @@ def send_to_workspace_with(nwk):
 
     sys.stderr.write("send_to_workspace %s -> %s\n" % (cwk.name, nwk.name))
 
-    cwk.detach(c, False)
+    cwk.detach(c, tiled)
     nwk.attach(c, True)
 
     if nwk.screen is None:
@@ -1129,7 +1128,7 @@ def send_to_workspace_with(nwk):
         update = True
 
     if tiled:
-        nwk.tile(c, update)
+        nwk.tile(c)
         c.stack_below()
     elif update:
         c.real_configure_notify()
