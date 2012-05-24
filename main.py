@@ -290,12 +290,11 @@ class Workspace:
 
     def detach(self, client, update=True):
         self.untile(client, update)
-        client.detach()
         self.remove(client)
 
-    def attach(self, client):
+    def attach(self, client, teleport=False):
         self.add(client)
-        client.attach(self)
+        client.attach(self, teleport)
 
     def __next_client(self, with_floating=True):
         if self.focused_client.tiled:
@@ -519,8 +518,6 @@ class Client:
         self.geo_unmax = None
         self.border_color = Screen.passive_color
         self.workspace = workspace
-        self.__detached = False
-        self.__bk_geo_abs = None
         self.tiled = False
         self.never_tiled = True
         self.__setup()
@@ -541,21 +538,6 @@ class Client:
         if geo_abs.x >= screen.x and geo_abs.x < screen.x+screen.width:
             return True
         return False
-
-    def detach(self):
-        self.__detached = True
-        self.__bk_geo_abs = self.absolute_geometry()
-
-    def attach(self, workspace):
-        if workspace.screen is not None and self.__detached:
-            sys.stderr.write("abs %d %d\n" % (self.__bk_geo_abs.x, self.__bk_geo_abs.y))
-            self.geo_virt.x = self.__bk_geo_abs.x - workspace.screen.x
-            self.geo_virt.y = self.__bk_geo_abs.y - workspace.screen.y
-            self.__detached = False
-            sys.stderr.write("virt %d %d\n" % (self.geo_virt.x, self.geo_virt.y))
-            sys.stderr.write("scr  %d %d\n" % (self.workspace.screen.x, self.workspace.screen.y))
-
-        self.workspace = workspace
 
     def move(self, dx, dy):
         self.geo_virt.x += dx
@@ -675,15 +657,16 @@ class Client:
         if self.tiled:
             self.stack_below()
 
-    def real_configure_notify(self):
-        if self.__detached:
-            geo_abs = self.__bk_geo_abs
-            self.geo_virt.x = geo_abs.x - self.workspace.screen.x
-            self.geo_virt.y = geo_abs.y - self.workspace.screen.y
-            self.__detached = False
-        else:
+    def attach(self, workspace, teleport):
+        if not teleport:
             geo_abs = self.absolute_geometry()
+            self.geo_virt.x = geo_abs.x - workspace.screen.x
+            self.geo_virt.y = geo_abs.y - workspace.screen.y
 
+        self.workspace = workspace
+
+    def real_configure_notify(self):
+        geo_abs = self.absolute_geometry()
         mask = ConfigWindow.X|ConfigWindow.Y|ConfigWindow.Width|ConfigWindow.Height|ConfigWindow.BorderWidth
         sys.stderr.write("r_configure: x %d y %d w %d h %d\n" % (geo_abs.x, geo_abs.y, self.geo_virt.w, self.geo_virt.h))
         pkt = pack('=xx2xIH2xiiIII', self.id, mask, geo_abs.x, geo_abs.y,
@@ -1136,17 +1119,8 @@ def send_to_workspace_with(nwk):
 
     sys.stderr.write("send_to_workspace %s -> %s\n" % (cwk.name, nwk.name))
 
-    # 1 - need to update cwk if it's visible and we send a tile
-    #     we might ignore next enter_notify ... or not
-    #
-    # 2 - send float to visible workspace does not work !
-    #     we teleport, this is not the same situation as move/resize
-    #     we need to compute when we leave not when we arrive
-    #
-    # 3 - we dont care of client.{detach/attach} calculus whe it's a tile
-
     cwk.detach(c, False)
-    nwk.attach(c)
+    nwk.attach(c, True)
 
     if nwk.screen is None:
         c.reparent(nwk.vroot)
