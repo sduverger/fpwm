@@ -1315,6 +1315,15 @@ status_line = StatusLine(pretty_print, Gap(h=18))
 #
 # TODO:
 # . extend _NET_WM support (_NET_VIRTUAL_ROOTS, _NET_WM_HINTS, ...)
+# . tasks / 2D workspaces
+# . restart/quit proper
+# . remove root/wm windows NET_WM actions on Screen.__init__ and do it only once
+# . split code into a package
+# . debug function
+# . "ignored windows" list
+# . focus color out of Screen
+# . only color focus active workspace ?
+# . send InputFocus when Goto another visible workspace
 #
 keyboard = Keyboard()
 mouse = Mouse()
