@@ -544,15 +544,13 @@ class Client:
 
     def detach(self):
         self.__detached = True
+        self.__bk_geo_abs = self.absolute_geometry()
 
     def attach(self, workspace):
-        geo_abs = self.absolute_geometry()
-        if workspace.screen is not None:
-            self.geo_virt.x = geo_abs.x - workspace.screen.x
-            self.geo_virt.y = geo_abs.y - workspace.screen.y
+        if workspace.screen is not None and self.__detached:
+            self.geo_virt.x = self.__bk_geo_abs.x - workspace.screen.x
+            self.geo_virt.y = self.__bk_geo_abs.y - workspace.screen.y
             self.__detached = False
-        else:
-            self.__bk_geo_abs = geo_abs
 
         self.workspace = workspace
 
@@ -1134,6 +1132,11 @@ def send_to_workspace_with(nwk):
     tiled = c.tiled
 
     sys.stderr.write("send_to_workspace %s -> %s\n" % (cwk.name, nwk.name))
+
+    # 1 - need to update cwk if it's visible and we send a tile
+    #     we might ignore next enter_notify ... or not
+    #
+    # 2 - send float to visible workspace does not work !
 
     cwk.detach(c, False)
     nwk.attach(c)
