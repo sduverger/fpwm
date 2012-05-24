@@ -1030,7 +1030,8 @@ def update_workspace_info():
         elif w != aw:
             vwn.append(w.name)
 
-    sys.stdout.write("%s %r %r\n" % (aw.name,vwn,hwn))
+    # active visible,... hidden,...
+    sys.stdout.write("%s %s %s\n" % (aw.name,",".join(vwn),",".join(hwn)))
     sys.stdout.flush()
 
 def current_workspace():
