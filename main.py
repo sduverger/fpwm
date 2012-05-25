@@ -168,14 +168,14 @@ class LayoutHTall(LayoutTall):
 # Workspace
 #
 class Workspace:
-    def __init__(self, name, viewport):
+    def __init__(self, name, viewport, layouts):
         self.name = name
         self.screen = None
         self.__clients = {}
         self.__master = None
         self.__slaves = []
         self.__floating = []
-        self.__layouts = [LayoutVTall(self), LayoutHTall(self)]
+        self.__layouts = [l(self) for l in layouts] #[LayoutVTall(self), LayoutHTall(self)]
         self.__current_layout = 0
         self.focused_client = None
         self.__toggle_desktop = False
@@ -1209,6 +1209,8 @@ class KeyMap:
 
 workspaces = [ "1", "2", "3", "web" ]
 
+layouts = [LayoutVtall, LayoutHTall]
+
 keyboard_bindings = [ (KeyMap.mod_alt, KeyMap.space, next_layout),
                       (KeyMap.mod_alt, KeyMap.t,     tile_client),
                       (KeyMap.mod_alt, KeyMap.f,     toggle_fullscreen),
@@ -1330,7 +1332,7 @@ ChangeProperty(con.core, PropMode.Replace, wm_win, atoms["_NET_WM_NAME"], Atom.S
 ChangeProperty(con.core, PropMode.Replace, wm_win, atoms["_NET_WM_PID"], Atom.CARDINAL, 32, 1, os.getpid())
 
 for w in workspaces:
-    _workspaces.append(Workspace(w, viewport))
+    _workspaces.append(Workspace(w, viewport, layouts))
 
 w = 0
 screen_ids = unpack_from("%dI" % reply.num_crtcs, reply.crtcs.buf())
