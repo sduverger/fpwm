@@ -418,12 +418,7 @@ class Workspace:
 
         if client is not None:
             self.focused_client.focus()
-            wid = self.focused_client.id
-        else:
-            con.core.SetInputFocus(InputFocus.PointerRoot, self.screen.root, InputFocus._None)
-            wid = self.screen.root
-
-        sys.stderr.write("focus_update 0x%x\n" % wid)
+            self.focused_client.id
 
     def reparent(self, who):
         for c in self.__clients.itervalues():
@@ -498,7 +493,7 @@ class Client:
 
     def __setup(self):
         mask  = EventMask.EnterWindow|EventMask.PropertyChange|EventMask.FocusChange
-        con.core.ChangeWindowAttributes(self.id, CW.EventMask, [mask])
+        con.core.ChangeWindowAttributes(self.id, CW.BorderPixel|CW.EventMask, [self.border_color,mask])
 
     def relative_geometry(self):
         return self.geo_virt.copy()
@@ -695,17 +690,19 @@ class Client:
 def event_enter_notify(event):
     sys.stderr.write("enter notify 0x%x: %r\n" % (event.event, event.__dict__))
     global _ignore_next_enter_notify
-    if _ignore_next_enter_notify:
-        _ignore_next_enter_notify = False
-        return
 
     cl = _clients.get(event.event)
-    if cl is not None:
-        if not set_current_screen_from(cl.workspace.screen):
-            sys.stderr.write("no screen for client 0x%x on workspace %s\n" % (cl.id, cl.workspace.name))
-            return
-    else:
-        set_current_screen_at(Geometry(event.root_x, event.root_y))
+    if cl is None:
+        return
+
+    if _ignore_next_enter_notify:
+        _ignore_next_enter_notify = False
+        sys.stderr.write("** ignored **\n")
+        return
+
+    if not set_current_screen_from(cl.workspace.screen):
+        sys.stderr.write("no screen for client 0x%x on workspace %s\n" % (cl.id, cl.workspace.name))
+        return
 
     current_workspace().update_focus(cl)
 
@@ -780,8 +777,8 @@ def event_handler(event):
     if hdl is not None:
         sys.stderr.write("--> %s\n" % event.__class__.__name__)
         hdl(event)
-    # else:
-    #     sys.stderr.write("** Unhandled event ** %r %r\n" % (event.__class__.__name__, event.__dict__))
+    else:
+        sys.stderr.write("** Unhandled event ** %r %r\n" % (event.__class__.__name__, event.__dict__))
 
 #
 # Keyboard
