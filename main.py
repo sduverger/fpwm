@@ -12,6 +12,7 @@
 # . focus color out of Screen
 # . only color focus active workspace ?
 # . send InputFocus when Goto another visible workspace
+# . manage FocusIn/FocusOut events
 #
 
 import sys, os
@@ -175,7 +176,7 @@ class Workspace:
         self.__master = None
         self.__slaves = []
         self.__floating = []
-        self.__layouts = [l(self) for l in layouts] #[LayoutVTall(self), LayoutHTall(self)]
+        self.__layouts = [l(self) for l in layouts]
         self.__current_layout = 0
         self.focused_client = None
         self.__toggle_desktop = False
@@ -218,9 +219,14 @@ class Workspace:
             c.stack_above()
 
     def map(self, client):
+        client.map()
+
         if client.never_tiled:
             self.__tile(client)
-        client.map()
+
+            self.update_focus(client)
+            global _ignore_next_enter_notify
+            _ignore_next_enter_notify = True
 
     def __tile(self, client):
         client.tile()
