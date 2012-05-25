@@ -1209,7 +1209,7 @@ class KeyMap:
 
 workspaces = [ "1", "2", "3", "web" ]
 
-layouts = [LayoutVtall, LayoutHTall]
+layouts = [LayoutVTall, LayoutHTall]
 
 keyboard_bindings = [ (KeyMap.mod_alt, KeyMap.space, next_layout),
                       (KeyMap.mod_alt, KeyMap.t,     tile_client),
