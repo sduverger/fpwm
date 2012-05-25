@@ -44,10 +44,6 @@ class StatusLine():
 # Screen
 #
 class Screen:
-    #focused_color = 0x94bff3
-    focused_color = 0xff0000
-    passive_color = 0x505050
-
     def __init__(self, viewport, x, y, w, h, workspaces, gap=None):
         self.root = viewport.root
         self.visual = viewport.root_visual
@@ -131,7 +127,11 @@ class LayoutVTall(LayoutTall):
                 c.geo_virt.y = i*H
                 c.geo_virt.w = int(Decimal(self.workspace.screen.width) * (Decimal(1.0) - self.ratio)) - 2*c.geo_virt.b
                 c.geo_virt.h = H - 2*c.geo_virt.b
+                if i == L-1:
+                    c.geo_virt.h += self.workspace.screen.height - (c.geo_virt.y + H)
+
                 c.real_configure_notify()
+
 
 class LayoutHTall(LayoutTall):
     def __init__(self, workspace):
@@ -163,7 +163,11 @@ class LayoutHTall(LayoutTall):
                 c.geo_virt.x = i*W
                 c.geo_virt.h = int(Decimal(self.workspace.screen.height) * (Decimal(1.0) - self.ratio)) - 2*c.geo_virt.b
                 c.geo_virt.w = W - (2*c.geo_virt.b)
+                # if i == W-1:
+                #     c.geo_virt.w += self.workspace.screen.width - (c.geo_virt.x+W)
+
                 c.real_configure_notify()
+
 
 #
 # Workspace
@@ -219,14 +223,13 @@ class Workspace:
             c.stack_above()
 
     def map(self, client):
-        client.map()
-
         if client.never_tiled:
             self.__tile(client)
+        client.map()
 
-            self.update_focus(client)
-            global _ignore_next_enter_notify
-            _ignore_next_enter_notify = True
+            # self.update_focus(client)
+            # global _ignore_next_enter_notify
+            # _ignore_next_enter_notify = True
 
     def __tile(self, client):
         client.tile()
@@ -491,7 +494,7 @@ class Client:
             self.geo_want = geometry.copy()
 
         self.geo_unmax = None
-        self.border_color = Screen.passive_color
+        self.border_color = passive_color
         self.workspace = workspace
         self.tiled = False
         self.never_tiled = True
@@ -566,12 +569,12 @@ class Client:
         con.core.ReparentWindow(self.id, self.parent, self.geo_virt.x, self.geo_virt.y)
 
     def focus(self):
-        self.border_color = Screen.focused_color
+        self.border_color = focused_color
         self.update_border_color()
         con.core.SetInputFocus(InputFocus.PointerRoot, self.id, InputFocus._None)
 
     def unfocus(self):
-        self.border_color = Screen.passive_color
+        self.border_color = passive_color
         self.update_border_color()
 
     def update_border_color(self):
@@ -1260,6 +1263,10 @@ def pretty_print(aw, vw, hw):
     sys.stdout.flush()
 
 status_line = StatusLine(pretty_print, Gap(h=18))
+
+focused_color = 0xff0000 # 0x94bff3
+passive_color = 0x505050
+
 
 # XXX: KeyButMask.Mod2 is always set (xpyb/Xephyr bug ?)
 # def xhephyr_fix(x):
