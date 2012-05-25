@@ -163,8 +163,8 @@ class LayoutHTall(LayoutTall):
                 c.geo_virt.x = i*W
                 c.geo_virt.h = int(Decimal(self.workspace.screen.height) * (Decimal(1.0) - self.ratio)) - 2*c.geo_virt.b
                 c.geo_virt.w = W - (2*c.geo_virt.b)
-                # if i == W-1:
-                #     c.geo_virt.w += self.workspace.screen.width - (c.geo_virt.x+W)
+                if i == L-1:
+                    c.geo_virt.w += self.workspace.screen.width - (c.geo_virt.x+W)
 
                 c.real_configure_notify()
 
