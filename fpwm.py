@@ -140,9 +140,7 @@ signal.signal(signal.SIGINT, event_sigint)
 
 while True:
     try:
-        event = runtime.con.wait_for_event()
+        event_handler(runtime.con.wait_for_event())
+        runtime.con.flush()
     except Exception, error:
         proper_disconnect("main: %s\n" % error.__class__.__name__)
-
-    event_handler(event)
-    runtime.con.flush()

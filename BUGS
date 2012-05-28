@@ -1,1 +1,3 @@
-- need a 1st event to start working (ie. focus dzen)
+. need a 1st event to start working (ie. focus dzen)
+. even if we put event_handler into exception block
+  xcb raise connection error while releasing clients
