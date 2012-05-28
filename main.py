@@ -1,11 +1,10 @@
 #!/usr/bin/env python
 
-#
 # TODO
-#
-# . extend _NET_WM support (_NET_VIRTUAL_ROOTS, _NET_WM_HINTS, ...)
-# . tasks / 2D workspaces
-# . restart/quit proper
+# . extends _NET_WM support (_NET_VIRTUAL_ROOTS, _NET_WM_HINTS, ...)
+# . tasks (aka workspace lists)
+# . 2d workspaces (next/prev/up/down)
+# . add/remove workspaces into tasks (line,column)
 # . split code into a package
 # . debug function
 # . "ignored windows" list
@@ -13,14 +12,13 @@
 # . only color focus active workspace ?
 # . send InputFocus when Goto another visible workspace
 # . manage FocusIn/FocusOut events
-#
+# . pager
 
 import sys, os, signal
 from   decimal import *
 import xcb
 from   xcb.xproto import *
 import xcb.randr
-
 
 #
 # Status Line
@@ -1000,25 +998,21 @@ def get_atoms(names, store):
     for n in store:
         store[n] = store[n].reply().atom
 
-def proper_exit(msg, rc):
+def proper_disconnect(msg):
     sys.stderr.write("%s\n" % msg)
-#    try:
     release_clients()
     mouse.detach()
     keyboard.detach()
     con.flush()
-#    except Exception, error:
-#        sys.stderr.write("%s\n" % error.__class__.__name__)
-#
     con.disconnect()
-    sys.exit(rc)
 
 def event_sigterm(signum, frame):
-    proper_exit("received SIGTERM", 0)
+    proper_disconnect("received SIGTERM")
+    sys.exit(0)
 
 def event_sigint(signum, frame):
-    proper_exit("received SIGINT", 0)
-
+    proper_disconnect("received SIGINT")
+    sys.exit(0)
 #
 # WM API
 #
@@ -1433,9 +1427,8 @@ signal.signal(signal.SIGINT, event_sigint)
 
 while True:
     try:
-        event = con.wait_for_event()
+        event_handler(con.wait_for_event())
+        con.flush()
     except Exception, error:
-        proper_exit("panic: %s\n" % error.__class__.__name__, 1)
-
-    event_handler(event)
-    con.flush()
+        proper_disconnect("main: %s\n" % error.__class__.__name__)
+        raise error
