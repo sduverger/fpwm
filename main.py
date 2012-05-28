@@ -1150,7 +1150,7 @@ def send_to_workspace_with(nwk):
     nwk.attach(c, True)
 
     if nwk.screen is None:
-        c.reparent(nwk.vroot)
+        c.reparent(nwk.vroot, 0)
         update = False
     else:
         update = True
