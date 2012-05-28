@@ -428,17 +428,17 @@ class Workspace:
         if client is not None:
             self.focused_client.focus()
 
-    def reparent(self, who):
+    def reparent(self, who, wm_state):
         for c in self.__clients.itervalues():
-            c.reparent(who)
+            c.reparent(who, wm_state)
 
     def set_passive(self):
         self.screen = None
-        self.reparent(self.vroot)
+        self.reparent(self.vroot, 0)
 
     def set_active(self, screen):
         self.screen = screen
-        self.reparent(self.screen.root)
+        self.reparent(self.screen.root, 1)
         self.update()
 
     def next_layout(self):
@@ -563,10 +563,6 @@ class Client:
         self.geo_virt.h += dy
         self.real_configure_notify()
 
-    def reparent(self, who):
-        self.parent = who
-        con.core.ReparentWindow(self.id, self.parent, self.geo_virt.x, self.geo_virt.y)
-
     def focus(self):
         self.border_color = focused_color
         self.update_border_color()
@@ -579,12 +575,17 @@ class Client:
     def update_border_color(self):
         con.core.ChangeWindowAttributes(self.id, CW.BorderPixel, [self.border_color])
 
-    def release(self, root):
-        self.reparent(root)
+    def reparent(self, who, wm_state):
+        self.parent = who
+        con.core.ReparentWindow(self.id, self.parent, self.geo_virt.x, self.geo_virt.y)
+        ChangeProperty(con.core, PropMode.Replace, self.id, _wm_atoms["WM_STATE"], Atom.CARDINAL, 32, 1, wm_state)
 
     def map(self):
         ChangeProperty(con.core, PropMode.Replace, self.id, _wm_atoms["WM_STATE"], Atom.CARDINAL, 32, 1, 1)
         con.core.MapWindow(self.id)
+
+    def release(self, root):
+        self.reparent(root)
 
     def tile(self):
         if self.never_tiled:
@@ -764,6 +765,9 @@ def event_button_press(event):
 def event_button_release(event):
     mouse.release(event)
 
+def event_property_notify(event):
+    sys.stderr.write("PropertyNotify %s: %s\n" % (con.core.GetAtomName(event.atom).reply().name.buf(), event.__dict__))
+
 #|EventMask.LeaveWindow
 #|EventMask.ButtonPress|EventMask.ButtonRelease
 events = [EventMask.SubstructureRedirect|EventMask.SubstructureNotify|EventMask.EnterWindow|EventMask.StructureNotify|EventMask.PropertyChange|EventMask.FocusChange]
@@ -777,6 +781,7 @@ event_handlers = { EnterNotifyEvent:event_enter_notify,
                    MotionNotifyEvent:event_motion_notify,
                    ButtonPressEvent:event_button_press,
                    ButtonReleaseEvent:event_button_release,
+                   PropertyNotifyEvent:event_property_notify,
                    }
 
 def event_handler(event):
