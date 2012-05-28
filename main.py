@@ -197,7 +197,7 @@ class Workspace:
     def remove(self, client):
         if self.focused_client == client:
             if len(self.__clients) > 1:
-                self.__next_client()
+                self.next_client()
             else:
                 client.unfocus()
                 self.focused_client = None
@@ -427,7 +427,6 @@ class Workspace:
 
         if client is not None:
             self.focused_client.focus()
-            self.focused_client.id
 
     def reparent(self, who):
         for c in self.__clients.itervalues():
@@ -1394,7 +1393,9 @@ signal.signal(signal.SIGINT, event_sigint)
 
 while True:
     try:
-        event_handler(con.wait_for_event())
-        con.flush()
+        event = con.wait_for_event()
     except Exception, error:
         proper_exit("panic: %s\n" % error.__class__.__name__, 1)
+
+    event_handler(event)
+    con.flush()
