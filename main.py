@@ -489,7 +489,7 @@ class Geometry:
         return Geometry(self.x, self.y, self.w, self.h, self.b)
 
 class Client:
-    def __init__(self, window, parent, workspace, geometry=None):
+    def __init__(self, window, parent, workspace, geometry=None, ignored=False):
         self.id = window
         self.parent = parent
         self.__min_w = 20
@@ -504,7 +504,11 @@ class Client:
         self.geo_unmax = None
         self.border_color = passive_color
         self.tiled = False
-        self.never_tiled = True
+        if ignored:
+            self.never_tiled = False
+        else:
+            self.never_tiled = True
+
         self.__set_workspace(workspace)
         self.__setup()
 
@@ -740,9 +744,18 @@ def event_map_window(event):
     wk = current_workspace()
     cl = wk.get_client(event.window)
     if cl is None:
-        cl = Client(event.window, event.parent, wk)
+        if ignored_client(event.window):
+            gmx = con.core.GetGeometry(event.window).reply()
+            geo = Geometry(gmx.x, gmx.y, gmx.width, gmx.height, 1)
+            ignored = True
+        else:
+            geo = None
+            ignored = False
+
+        cl = Client(event.window, event.parent, wk, geo, ignored)
         _clients[cl.id] = cl
         wk.add(cl)
+
     wk.map(cl)
 
 def event_destroy_notify(event):
@@ -941,6 +954,17 @@ def vanilla_configure_window_request(event):
         values.append(event.stack_mode)
 
     con.core.ConfigureWindow(event.window, event.value_mask, values)
+
+def ignored_client(cid):
+    r = con.core.GetProperty(False, cid, _wm_atoms["WM_CLASS"], Atom.STRING, 0, 20).reply()
+    if r.value_len != 0:
+        classes = str(r.value.buf()).split('\x00')
+        if len(classes) > 1:
+            if classes[1] in ignored_windows:
+                return True
+        if classes[0] in ignored_windows:
+            return True
+    return False
 
 def acquire_ext_clients(viewport):
     clients = []
@@ -1314,6 +1338,8 @@ status_line = StatusLine(pretty_print, Gap(h=18))
 focused_color = 0xff0000 # 0x94bff3
 passive_color = 0x505050
 
+ignored_windows = ["Gmrun", "MPlayer"]
+
 
 # XXX: KeyButMask.Mod2 is always set (xpyb/Xephyr bug ?)
 # def xhephyr_fix(x):
@@ -1333,7 +1359,6 @@ _screens = []
 _workspaces = []
 _clients = {}
 _ignore_next_enter_notify = False
-
 wmname = "fpwm"
 
 con = xcb.connect()
@@ -1362,7 +1387,7 @@ if len(workspaces) < reply.num_crtcs:
     sys.exit(1)
 
 _wm_atoms = {}
-_wm_atom_names = ["WM_STATE"]
+_wm_atom_names = ["WM_STATE", "WM_CLASS"]
 get_atoms(_wm_atom_names, _wm_atoms)
 
 _net_wm_atoms = {}
