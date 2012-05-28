@@ -62,8 +62,13 @@ def event_map_window(event):
     wk = current_workspace()
     cl = wk.get_client(event.window)
     if cl is None:
+        updated = False
         if ignored_client(event.window):
             gmx = runtime.con.core.GetGeometry(event.window).reply()
+            if gmx.border_width == 0:
+                gmx.x -= 1
+                gmx.y -= 1
+                updated = True
             geo = Geometry(gmx.x, gmx.y, gmx.width, gmx.height, 1)
             ignored = True
         else:
@@ -73,6 +78,10 @@ def event_map_window(event):
         cl = Client(runtime.con, event.window, event.parent, wk, geo, ignored)
         runtime.clients[cl.id] = cl
         wk.add(cl)
+
+    if updated:
+        cl.real_configure_notify()
+        cl.stack_above()
 
     wk.map(cl)
     current_workspace().update_focus(cl)
