@@ -15,7 +15,7 @@
 # . manage FocusIn/FocusOut events
 #
 
-import sys, os
+import sys, os, signal
 from   decimal import *
 import xcb
 from   xcb.xproto import *
@@ -580,9 +580,7 @@ class Client:
     def update_border_color(self):
         con.core.ChangeWindowAttributes(self.id, CW.BorderPixel, [self.border_color])
 
-    def release(root):
-        self.geo_virt.x = 0
-        self.geo_virt.y = 0
+    def release(self, root):
         self.reparent(root)
 
     def map(self):
@@ -796,7 +794,8 @@ class Keyboard:
     def __init__(self):
         self.__bindings = {}
 
-    def attach(self, bindings):
+    def attach(self, bindings, root):
+        self.__root = root
         for m,k,f in bindings:
             if m is None:
                 raise ValueError("missing modifier in keyboard bindings")
@@ -805,10 +804,10 @@ class Keyboard:
                 self.__bindings[k] = {}
 
             self.__bindings[k][m] = f
-            con.core.GrabKey(False, current_client_id(), m, k, GrabMode.Async, GrabMode.Async)
+            con.core.GrabKey(False, self.__root, m, k, GrabMode.Async, GrabMode.Async)
 
     def detach(self):
-        con.core.UngrabKey(False, current_client_id(), ModMask.Any)
+        con.core.UngrabKey(False, self.__root, ModMask.Any)
 
     def press(self, event):
         sys.stderr.write("key press 0x%x: %r\n" % (event.child, event.__dict__))
@@ -830,7 +829,8 @@ class Mouse:
         self.__left = False
         self.__bindings = {}
 
-    def attach(self, bindings):
+    def attach(self, bindings, root):
+        self.__root = root
         for m,b,f in bindings:
             if m is None:
                 raise ValueError("missing modifier in mouse bindings")
@@ -842,10 +842,10 @@ class Mouse:
 
             bmask = eval("EventMask.Button%dMotion" % b)
             emask = EventMask.ButtonPress|EventMask.ButtonRelease|bmask
-            con.core.GrabButton(False, current_client_id(), emask, GrabMode.Async, GrabMode.Async, 0, 0, b, m)
+            con.core.GrabButton(False, self.__root, emask, GrabMode.Async, GrabMode.Async, 0, 0, b, m)
 
     def detach(self):
-        con.core.UngrabButton(False, current_client_id(), ButtonMask.Any)
+        con.core.UngrabButton(False, self.__root, ButtonMask.Any)
 
     def motion(self, event):
         if self.__acting is None:
@@ -928,6 +928,7 @@ def acquire_ext_clients(viewport):
     clients = []
     reply = con.core.QueryTree(viewport.root).reply()
     if reply.children_len == 0:
+        sys.stderr.write("no ext client found\n")
         return clients
     children = unpack_from("%dI" % reply.children_len, reply.children.buf())
     for cid in children:
@@ -954,7 +955,7 @@ def add_ext_clients(ext_clients):
             sc = get_screen_at(gm)
 
         wk = sc.active_workspace
-        cl = Client(cid, viewport.root, wk, gm)
+        cl = Client(cid, _viewport.root, wk, gm)
         _clients[cid] = cl
         wk.add(cl)
 
@@ -962,9 +963,9 @@ def add_ext_clients(ext_clients):
             cl.real_configure_notify()
         sys.stderr.write("acquired client 0x%x\n" % cid)
 
-def release_clients(viewport):
-    for c in _clients:
-        c.release(viewport.root)
+def release_clients():
+    for c in _clients.itervalues():
+        c.release(_viewport.root)
 
 def Flat(format, data):
     f={32:'I',16:'H',8:'B'}[format]
@@ -974,6 +975,24 @@ def Flat(format, data):
 
 def ChangeProperty(core, mode, window, property, type, format, data_len, data):
     core.ChangeProperty(mode, window, property, type, format, data_len, Flat(format, data))
+
+def proper_exit(msg, rc):
+    sys.stderr.write("%s\n" % msg)
+#    try:
+    release_clients()
+    mouse.detach()
+    keyboard.detach()
+#    except Exception, error:
+#        sys.stderr.write("%s\n" % error.__class__.__name__)
+#
+    con.disconnect()
+    sys.exit(rc)
+
+def event_sigterm(signum, frame):
+    proper_exit("received SIGTERM", 0)
+
+def event_sigint(signum, frame):
+    proper_exit("received SIGINT", 0)
 
 #
 # WM API
@@ -1174,6 +1193,7 @@ def spawn(*args):
     if child != 0:
         os.waitpid(child, 0)
         return
+    os.close(sys.stdout.fileno())
     if os.fork() != 0:
         os._exit(0)
     os.setsid()
@@ -1291,7 +1311,7 @@ wmname = "fpwm"
 
 con = xcb.connect()
 setup = con.get_setup()
-viewport = setup.roots[0]
+_viewport = setup.roots[0]
 xrandr = con(xcb.randr.key)
 
 con.core.GrabServer()
@@ -1299,15 +1319,15 @@ while con.poll_for_event():
     pass
 
 try:
-    con.core.ChangeWindowAttributesChecked(viewport.root, CW.EventMask, events).check()
+    con.core.ChangeWindowAttributesChecked(_viewport.root, CW.EventMask, events).check()
 except BadAccess, e:
     sys.stderr.write("A window manager is already running !\n")
     con.disconnect()
     sys.exit(1)
 
-ext_clients = acquire_ext_clients(viewport)
+ext_clients = acquire_ext_clients(_viewport)
 
-reply = xrandr.GetScreenResources(viewport.root).reply()
+reply = xrandr.GetScreenResources(_viewport.root).reply()
 
 if len(workspaces) < reply.num_crtcs:
     sys.stderr.write("Not enough workspaces\n")
@@ -1333,16 +1353,16 @@ for n in atom_names:
 for n in atoms:
     atoms[n] = atoms[n].reply().atom
 
-ChangeProperty(con.core, PropMode.Replace, viewport.root, atoms["_NET_SUPPORTED"], Atom.ATOM, 32, len(atoms), atoms.itervalues())
+ChangeProperty(con.core, PropMode.Replace, _viewport.root, atoms["_NET_SUPPORTED"], Atom.ATOM, 32, len(atoms), atoms.itervalues())
 wm_win = con.generate_id()
-con.core.CreateWindow(viewport.root_depth,wm_win,viewport.root,-1,-1,1,1,0,WindowClass.CopyFromParent,viewport.root_visual,0,[])
-ChangeProperty(con.core, PropMode.Replace, viewport.root,  atoms["_NET_SUPPORTING_WM_CHECK"], Atom.WINDOW, 32, 1, wm_win)
+con.core.CreateWindow(_viewport.root_depth,wm_win,_viewport.root,-1,-1,1,1,0,WindowClass.CopyFromParent,_viewport.root_visual,0,[])
+ChangeProperty(con.core, PropMode.Replace, _viewport.root,  atoms["_NET_SUPPORTING_WM_CHECK"], Atom.WINDOW, 32, 1, wm_win)
 ChangeProperty(con.core, PropMode.Replace, wm_win, atoms["_NET_SUPPORTING_WM_CHECK"], Atom.WINDOW, 32, 1, wm_win)
 ChangeProperty(con.core, PropMode.Replace, wm_win, atoms["_NET_WM_NAME"], Atom.STRING, 8, len(wmname), wmname)
 ChangeProperty(con.core, PropMode.Replace, wm_win, atoms["_NET_WM_PID"], Atom.CARDINAL, 32, 1, os.getpid())
 
 for w in workspaces:
-    _workspaces.append(Workspace(w, viewport, layouts))
+    _workspaces.append(Workspace(w, _viewport, layouts))
 
 w = 0
 screen_ids = unpack_from("%dI" % reply.num_crtcs, reply.crtcs.buf())
@@ -1354,7 +1374,7 @@ for sid in screen_ids:
         gap = status_line.gap
     else:
         gap = None
-    scr = Screen(viewport, reply.x, reply.y, reply.width, reply.height, _workspaces, gap)
+    scr = Screen(_viewport, reply.x, reply.y, reply.width, reply.height, _workspaces, gap)
     focused_screen = scr
     scr.set_workspace(_workspaces[w])
     _screens.append(scr)
@@ -1367,22 +1387,14 @@ con.flush()
 while con.poll_for_event():
     pass
 
-keyboard.attach(keyboard_bindings)
-mouse.attach(mouse_bindings)
+keyboard.attach(keyboard_bindings, _viewport.root)
+mouse.attach(mouse_bindings, _viewport.root)
+signal.signal(signal.SIGTERM, event_sigterm)
+signal.signal(signal.SIGINT, event_sigint)
 
 while True:
     try:
-        event = con.wait_for_event()
+        event_handler(con.wait_for_event())
+        con.flush()
     except Exception, error:
-        sys.stderr.write("panic: %s\n" % error.__class__.__name__)
-        con.disconnect()
-        sys.exit(1)
-
-    event_handler(event)
-    con.flush()
-
-# mouse.detach()
-# keyboard.detach()
-# release_clients(viewport)
-sys.stderr.write("exiting\n")
-con.disconnect()
+        proper_exit("panic: %s\n" % error.__class__.__name__, 1)
