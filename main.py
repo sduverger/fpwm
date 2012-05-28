@@ -583,6 +583,7 @@ class Client:
         self.reparent(root)
 
     def map(self):
+        ChangeProperty(con.core, PropMode.Replace, self.id, _wm_atoms["WM_STATE"], Atom.CARDINAL, 32, 1, 1)
         con.core.MapWindow(self.id)
 
     def tile(self):
@@ -1333,7 +1334,9 @@ if len(workspaces) < reply.num_crtcs:
     con.disconnect()
     sys.exit(1)
 
-atom_names = ["_NET_SUPPORTED", "_NET_SUPPORTING_WM_CHECK", "_NET_WM_NAME", "_NET_WM_PID"]
+_wm_atom_names = ["WM_STATE", "WM_PROTOCOLS"]
+
+_netwm_atom_names = ["_NET_SUPPORTED", "_NET_SUPPORTING_WM_CHECK", "_NET_WM_NAME", "_NET_WM_PID"]
 # "_NET_STARTUP_ID", "_NET_CLIENT_LIST", "_NET_CLIENT_LIST_STACKING", "_NET_NUMBER_OF_DESKTOPS",
 # "_NET_CURRENT_DESKTOP", "_NET_DESKTOP_NAMES", "_NET_ACTIVE_WINDOW", "_NET_DESKTOP_GEOMETRY",
 # "_NET_CLOSE_WINDOW", "_NET_WM_STRUT_PARTIAL", "_NET_WM_ICON_NAME", "_NET_WM_VISIBLE_ICON_NAME",
@@ -1346,19 +1349,28 @@ atom_names = ["_NET_SUPPORTED", "_NET_SUPPORTING_WM_CHECK", "_NET_WM_NAME", "_NE
 # "_NET_WM_STATE_MAXIMIZED_HORZ", "_NET_WM_STATE_MAXIMIZED_VERT", "_NET_WM_STATE_ABOVE",
 # "_NET_WM_STATE_BELOW", "_NET_WM_STATE_MODAL", "_NET_WM_STATE_HIDDEN", "_NET_WM_STATE_DEMANDS_ATTENTION"
 
-atoms = {}
-for n in atom_names:
-    atoms[n] = con.core.InternAtom(False, len(n), n)
-for n in atoms:
-    atoms[n] = atoms[n].reply().atom
+_wm_atoms = {}
+_netwm_atoms = {}
+for n in _wm_atom_names:
+    _wm_atoms[n] = con.core.InternAtom(False, len(n), n)
+for n in _netwm_atom_names:
+    _netwm_atoms[n] = con.core.InternAtom(False, len(n), n)
 
-ChangeProperty(con.core, PropMode.Replace, _viewport.root, atoms["_NET_SUPPORTED"], Atom.ATOM, 32, len(atoms), atoms.itervalues())
+for n in _wm_atoms:
+    _wm_atoms[n] = _wm_atoms[n].reply().atom
+for n in _netwm_atoms:
+    _netwm_atoms[n] = _netwm_atoms[n].reply().atom
+
+ChangeProperty(con.core,PropMode.Replace,_viewport.root,
+               _netwm_atoms["_NET_SUPPORTED"], Atom.ATOM, 32, len(_netwm_atoms), _netwm_atoms.itervalues())
+
 wm_win = con.generate_id()
 con.core.CreateWindow(_viewport.root_depth,wm_win,_viewport.root,-1,-1,1,1,0,WindowClass.CopyFromParent,_viewport.root_visual,0,[])
-ChangeProperty(con.core, PropMode.Replace, _viewport.root,  atoms["_NET_SUPPORTING_WM_CHECK"], Atom.WINDOW, 32, 1, wm_win)
-ChangeProperty(con.core, PropMode.Replace, wm_win, atoms["_NET_SUPPORTING_WM_CHECK"], Atom.WINDOW, 32, 1, wm_win)
-ChangeProperty(con.core, PropMode.Replace, wm_win, atoms["_NET_WM_NAME"], Atom.STRING, 8, len(wmname), wmname)
-ChangeProperty(con.core, PropMode.Replace, wm_win, atoms["_NET_WM_PID"], Atom.CARDINAL, 32, 1, os.getpid())
+
+ChangeProperty(con.core, PropMode.Replace, _viewport.root, _netwm_atoms["_NET_SUPPORTING_WM_CHECK"], Atom.WINDOW, 32, 1, wm_win)
+ChangeProperty(con.core, PropMode.Replace, wm_win, _netwm_atoms["_NET_SUPPORTING_WM_CHECK"], Atom.WINDOW, 32, 1, wm_win)
+ChangeProperty(con.core, PropMode.Replace, wm_win, _netwm_atoms["_NET_WM_NAME"], Atom.STRING, 8, len(wmname), wmname)
+ChangeProperty(con.core, PropMode.Replace, wm_win, _netwm_atoms["_NET_WM_PID"], Atom.CARDINAL, 32, 1, os.getpid())
 
 for w in workspaces:
     _workspaces.append(Workspace(w, _viewport, layouts))
