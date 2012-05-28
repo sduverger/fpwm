@@ -75,6 +75,7 @@ def event_map_window(event):
         wk.add(cl)
 
     wk.map(cl)
+    current_workspace().update_focus(cl)
 
 def event_destroy_notify(event):
     wk = current_workspace()

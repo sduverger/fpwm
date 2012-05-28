@@ -75,8 +75,8 @@ class Workspace:
             self.__tile(client)
         client.map()
 
-            # self.update_focus(client)
-            # runtime.ignore_next_enter_notify = True
+        # self.update_focus(client)
+        # runtime.ignore_next_enter_notify = True
 
     def __tile(self, client):
         client.tile()
