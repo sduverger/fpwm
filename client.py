@@ -199,6 +199,10 @@ class Client:
 
     def real_configure_notify(self):
         geo_abs = self.absolute_geometry()
+        if not self.tiled and self.workspace.screen.gap is not None:
+            if self.workspace.screen.gap.top:
+                geo_abs.y -= self.workspace.screen.gap.h
+
         self.send_config_window(geo_abs.x, geo_abs.y, self.geo_virt.w, self.geo_virt.h, self.geo_virt.b)
 
     def synthetic_configure_notify(self):
