@@ -6,7 +6,6 @@
 # . 2d workspaces (next/prev/up/down)
 # . add/remove workspaces into tasks (line,column)
 # . split code into a package
-# . debug function
 # . "ignored windows" list
 # . focus color out of Screen
 # . only color focus active workspace ?
@@ -19,6 +18,15 @@ from   decimal import *
 import xcb
 from   xcb.xproto import *
 import xcb.randr
+
+#
+# Debug
+#
+do_debug = True
+
+def debug(msg):
+    if do_debug:
+        sys.stderr.write(msg)
 
 #
 # Status Line
@@ -646,7 +654,7 @@ class Client:
         self.__set_workspace(workspace)
 
     def send_config_window(self, x, y, w, h, b):
-        sys.stderr.write("r_configure 0x%x: x %d y %d w %d h %d\n" % (self.id, x, y, w, h))
+        debug("r_configure 0x%x: x %d y %d w %d h %d\n" % (self.id, x, y, w, h))
         mask = ConfigWindow.X|ConfigWindow.Y|ConfigWindow.Width|ConfigWindow.Height|ConfigWindow.BorderWidth
         pkt = pack('=xx2xIH2xiiIII', self.id, mask, x, y, w, h, b)
         con.core.send_request(xcb.Request(pkt, 12, True, False), xcb.VoidCookie())
@@ -656,7 +664,7 @@ class Client:
         self.send_config_window(geo_abs.x, geo_abs.y, self.geo_virt.w, self.geo_virt.h, self.geo_virt.b)
 
     def synthetic_configure_notify(self):
-        sys.stderr.write("s_configure: x %d y %d w %d h %d\n" % (self.geo_want.x, self.geo_want.y, self.geo_want.w, self.geo_want.h))
+        debug("s_configure: x %d y %d w %d h %d\n" % (self.geo_want.x, self.geo_want.y, self.geo_want.w, self.geo_want.h))
         event = pack("=B3xIIIHHHHHBx", 22, self.id, self.id, 0,
                      self.geo_want.x, self.geo_want.y,
                      self.geo_want.w, self.geo_want.h, self.geo_want.b, 0)
@@ -701,7 +709,7 @@ class Client:
 # Events
 #
 def event_enter_notify(event):
-    sys.stderr.write("enter notify 0x%x: %r\n" % (event.event, event.__dict__))
+    debug("enter notify 0x%x: %r\n" % (event.event, event.__dict__))
     global _ignore_next_enter_notify
 
     cl = _clients.get(event.event)
@@ -710,11 +718,11 @@ def event_enter_notify(event):
 
     if _ignore_next_enter_notify:
         _ignore_next_enter_notify = False
-        sys.stderr.write("** ignored **\n")
+        debug("** ignored **\n")
         return
 
     if not set_current_screen_from(cl.workspace.screen):
-        sys.stderr.write("no screen for client 0x%x on workspace %s\n" % (cl.id, cl.workspace.name))
+        debug("no screen for client 0x%x on workspace %s\n" % (cl.id, cl.workspace.name))
         return
 
     current_workspace().update_focus(cl)
@@ -728,7 +736,7 @@ def event_configure_window_request(event):
         cl.configure(event)
 
 def event_map_window(event):
-    sys.stderr.write("map request: %r\n" % event.__dict__)
+    debug("map request: %r\n" % event.__dict__)
     wk = current_workspace()
     cl = wk.get_client(event.window)
     if cl is None:
@@ -741,7 +749,7 @@ def event_destroy_notify(event):
     wk = current_workspace()
     cl = wk.get_client(event.window)
     if cl is not None:
-        sys.stderr.write("destroy client %d\n" % event.window)
+        debug("destroy client %d\n" % event.window)
         if cl.tiled:
             wk.untile(cl)
         wk.remove(cl)
@@ -771,7 +779,7 @@ def event_button_release(event):
     mouse.release(event)
 
 def event_property_notify(event):
-    sys.stderr.write("PropertyNotify %s: %s\n" % (con.core.GetAtomName(event.atom).reply().name.buf(), event.__dict__))
+    debug("PropertyNotify %s: %s\n" % (con.core.GetAtomName(event.atom).reply().name.buf(), event.__dict__))
 
 #|EventMask.LeaveWindow
 #|EventMask.ButtonPress|EventMask.ButtonRelease
@@ -792,10 +800,10 @@ event_handlers = { EnterNotifyEvent:event_enter_notify,
 def event_handler(event):
     hdl = event_handlers.get(event.__class__, None)
     if hdl is not None:
-        sys.stderr.write("--> %s\n" % event.__class__.__name__)
+        debug("--> %s\n" % event.__class__.__name__)
         hdl(event)
     else:
-        sys.stderr.write("** Unhandled event ** %r %r\n" % (event.__class__.__name__, event.__dict__))
+        debug("** Unhandled event ** %r %r\n" % (event.__class__.__name__, event.__dict__))
 
 #
 # Keyboard
@@ -820,11 +828,11 @@ class Keyboard:
         con.core.UngrabKey(False, self.__root, ModMask.Any)
 
     def press(self, event):
-        sys.stderr.write("key press 0x%x: %r\n" % (event.child, event.__dict__))
+        debug("key press 0x%x: %r\n" % (event.child, event.__dict__))
         self.__bindings[event.detail][event.state]()
 
     def release(self, event):
-        sys.stderr.write("key release 0x%x: %r\n" % (event.child, event.__dict__))
+        debug("key release 0x%x: %r\n" % (event.child, event.__dict__))
 
 #
 # Mouse
@@ -870,7 +878,7 @@ class Mouse:
         self.__y = event.event_y
 
     def press(self, event):
-        sys.stderr.write("button press 0x%x: %r\n" % (event.child, event.__dict__))
+        debug("button press 0x%x: %r\n" % (event.child, event.__dict__))
         if self.__acting is not None or event.child == 0:
             return
 
@@ -895,7 +903,7 @@ class Mouse:
             self.__up = False
 
     def release(self, event):
-        sys.stderr.write("button release 0x%x: %r\n" % (event.child, event.__dict__))
+        debug("button release 0x%x: %r\n" % (event.child, event.__dict__))
         set_current_screen_at(Geometry(event.root_x, event.root_y))
 
         if self.__acting is None:
@@ -938,7 +946,7 @@ def acquire_ext_clients(viewport):
     clients = []
     reply = con.core.QueryTree(viewport.root).reply()
     if reply.children_len == 0:
-        sys.stderr.write("no ext client found\n")
+        debug("no ext client found\n")
         return clients
     children = unpack_from("%dI" % reply.children_len, reply.children.buf())
     for cid in children:
@@ -952,7 +960,7 @@ def add_ext_clients(ext_clients):
     for cid in ext_clients:
         geo = con.core.GetGeometry(cid).reply()
         gm = Geometry(geo.x, geo.y, geo.width, geo.height, 1)
-        sys.stderr.write("ext client at x %d y %d w %d h %d b %d\n" % (gm.x, gm.y, gm.w, gm.h, gm.b))
+        debug("ext client at x %d y %d w %d h %d b %d\n" % (gm.x, gm.y, gm.w, gm.h, gm.b))
 
         r = con.core.GetProperty(False, cid, _fp_wm_atoms["_FP_WM_WORKSPACE"], Atom.STRING, 0, 10).reply()
         lost_client = True
@@ -976,7 +984,7 @@ def add_ext_clients(ext_clients):
         cl = Client(cid, _viewport.root, wk, gm)
         _clients[cid] = cl
         wk.add(cl)
-        sys.stderr.write("acquired client 0x%x\n" % cid)
+        debug("acquired client 0x%x\n" % cid)
 
 def release_clients():
     for c in _clients.itervalues():
@@ -1138,7 +1146,7 @@ def send_to_workspace_with(nwk):
     cwk = c.workspace
     tiled = c.tiled
 
-    sys.stderr.write("send_to_workspace %s -> %s\n" % (cwk.name, nwk.name))
+    debug("send_to_workspace %s -> %s\n" % (cwk.name, nwk.name))
 
     cwk.detach(c, tiled)
     nwk.attach(c, True)
@@ -1170,19 +1178,19 @@ def send_to_prev_workspace():
 def goto_workspace(n):
     nwk = get_workspace_at(n)
     if nwk is not None and nwk != current_workspace() and nwk.screen is None:
-        sys.stderr.write("goto_workspace %s -> %s\n" % (current_workspace().name, nwk.name))
+        debug("goto_workspace %s -> %s\n" % (current_workspace().name, nwk.name))
         current_screen().set_workspace(nwk)
 
 def next_workspace():
     nwk = get_next_workspace_with(current_workspace())
     if nwk is not None:
-        sys.stderr.write("next_workspace %s -> %s\n" % (current_workspace().name, nwk.name))
+        debug("next_workspace %s -> %s\n" % (current_workspace().name, nwk.name))
         current_screen().set_workspace(nwk)
 
 def prev_workspace():
     nwk = get_prev_workspace_with(current_workspace())
     if nwk is not None:
-        sys.stderr.write("prev_workspace %s -> %s\n" % (current_workspace().name, nwk.name))
+        debug("prev_workspace %s -> %s\n" % (current_workspace().name, nwk.name))
         current_screen().set_workspace(nwk)
 
 def next_client():
@@ -1340,7 +1348,7 @@ while con.poll_for_event():
 try:
     con.core.ChangeWindowAttributesChecked(_viewport.root, CW.EventMask, events).check()
 except BadAccess, e:
-    sys.stderr.write("A window manager is already running !\n")
+    debug("A window manager is already running !\n")
     con.disconnect()
     sys.exit(1)
 
@@ -1349,7 +1357,7 @@ ext_clients = acquire_ext_clients(_viewport)
 reply = xrandr.GetScreenResources(_viewport.root).reply()
 
 if len(workspaces) < reply.num_crtcs:
-    sys.stderr.write("Not enough workspaces\n")
+    debug("Not enough workspaces\n")
     con.disconnect()
     sys.exit(1)
 
