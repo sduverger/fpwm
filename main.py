@@ -54,8 +54,11 @@ class Screen:
         self.height = h
         self.workspaces = workspaces
         self.active_workspace = None
+        self.set_gap(gap)
 
-        if gap is not None:
+    def set_gap(self, gap):
+        self.gap = gap
+        if self.gap is not None:
             self.height -= gap.h
             if gap.top:
                 self.y += gap.h
@@ -494,10 +497,15 @@ class Client:
 
         self.geo_unmax = None
         self.border_color = passive_color
-        self.workspace = workspace
         self.tiled = False
         self.never_tiled = True
+        self.__set_workspace(workspace)
         self.__setup()
+
+    def __set_workspace(self, workspace):
+        self.workspace = workspace
+        ChangeProperty(con.core, PropMode.Replace, self.id, _fp_wm_atoms["_FP_WM_WORKSPACE"], Atom.STRING, 8,
+                       len(self.workspace.name), self.workspace.name)
 
     def __setup(self):
         mask  = EventMask.EnterWindow|EventMask.PropertyChange|EventMask.FocusChange
@@ -584,9 +592,6 @@ class Client:
         ChangeProperty(con.core, PropMode.Replace, self.id, _wm_atoms["WM_STATE"], Atom.CARDINAL, 32, 1, 1)
         con.core.MapWindow(self.id)
 
-    def release(self, root):
-        self.reparent(root)
-
     def tile(self):
         if self.never_tiled:
             self.never_tiled = False
@@ -640,15 +645,17 @@ class Client:
             self.geo_virt.x = geo_abs.x - workspace.screen.x
             self.geo_virt.y = geo_abs.y - workspace.screen.y
 
-        self.workspace = workspace
+        self.__set_workspace(workspace)
+
+    def send_config_window(self, x, y, w, h, b):
+        sys.stderr.write("r_configure 0x%x: x %d y %d w %d h %d\n" % (self.id, x, y, w, h))
+        mask = ConfigWindow.X|ConfigWindow.Y|ConfigWindow.Width|ConfigWindow.Height|ConfigWindow.BorderWidth
+        pkt = pack('=xx2xIH2xiiIII', self.id, mask, x, y, w, h, b)
+        con.core.send_request(xcb.Request(pkt, 12, True, False), xcb.VoidCookie())
 
     def real_configure_notify(self):
         geo_abs = self.absolute_geometry()
-        mask = ConfigWindow.X|ConfigWindow.Y|ConfigWindow.Width|ConfigWindow.Height|ConfigWindow.BorderWidth
-        sys.stderr.write("r_configure 0x%x: x %d y %d w %d h %d\n" % (self.id,geo_abs.x,geo_abs.y,self.geo_virt.w,self.geo_virt.h))
-        pkt = pack('=xx2xIH2xiiIII', self.id, mask, geo_abs.x, geo_abs.y,
-                   self.geo_virt.w, self.geo_virt.h, self.geo_virt.b)
-        con.core.send_request(xcb.Request(pkt, 12, True, False), xcb.VoidCookie())
+        self.send_config_window(geo_abs.x, geo_abs.y, self.geo_virt.w, self.geo_virt.h, self.geo_virt.b)
 
     def synthetic_configure_notify(self):
         sys.stderr.write("s_configure: x %d y %d w %d h %d\n" % (self.geo_want.x, self.geo_want.y, self.geo_want.w, self.geo_want.h))
@@ -940,37 +947,43 @@ def acquire_ext_clients(viewport):
         wa = con.core.GetWindowAttributes(cid).reply()
         if wa.map_state == MapState.Unmapped or wa.override_redirect:
             continue
-        geo = con.core.GetGeometry(cid).reply()
-        clients.append((cid, geo.x, geo.y, geo.width, geo.height, geo.border_width))
+        clients.append(cid)
     return clients
 
 def add_ext_clients(ext_clients):
-    for cid,x,y,w,h,b in ext_clients:
-        lost_client = False
-        gm = Geometry(x, y, w, h, b)
-        sys.stderr.write("ext client at x %d y %d w %d h %d b %d\n" % (x,y,w,h,b))
+    for cid in ext_clients:
+        geo = con.core.GetGeometry(cid).reply()
+        gm = Geometry(geo.x, geo.y, geo.width, geo.height, 1)
+        sys.stderr.write("ext client at x %d y %d w %d h %d b %d\n" % (gm.x, gm.y, gm.w, gm.h, gm.b))
 
-        sc = get_screen_at(gm)
-        if sc is None:
-            lost_client = True
-            gm.x = 0
-            gm.y = 0
-            gm.w = 320
-            gm.h = 240
+        r = con.core.GetProperty(False, cid, _fp_wm_atoms["_FP_WM_WORKSPACE"], Atom.STRING, 0, 10).reply()
+        lost_client = True
+        if r.value_len != 0:
+            for w in _workspaces:
+                if w.name == str(r.value.buf()):
+                    wk = w
+                    lost_client = False
+                    break
+
+        if lost_client:
             sc = get_screen_at(gm)
+            if sc is None:
+                gm.x = 0
+                gm.y = 0
+                gm.w = 320
+                gm.h = 240
+                sc = get_screen_at(gm)
+            wk = sc.active_workspace
 
-        wk = sc.active_workspace
         cl = Client(cid, _viewport.root, wk, gm)
         _clients[cid] = cl
         wk.add(cl)
-
-        if lost_client:
-            cl.real_configure_notify()
         sys.stderr.write("acquired client 0x%x\n" % cid)
 
 def release_clients():
     for c in _clients.itervalues():
-        c.release(_viewport.root)
+        con.core.ReparentWindow(c.id, _viewport.root, c.geo_virt.x, c.geo_virt.y)
+        c.send_config_window(c.geo_virt.x, c.geo_virt.y, c.geo_virt.w, c.geo_virt.h, c.geo_virt.b)
 
 def Flat(format, data):
     f={32:'I',16:'H',8:'B'}[format]
@@ -981,12 +994,19 @@ def Flat(format, data):
 def ChangeProperty(core, mode, window, property, type, format, data_len, data):
     core.ChangeProperty(mode, window, property, type, format, data_len, Flat(format, data))
 
+def get_atoms(names, store):
+    for n in names:
+        store[n] = con.core.InternAtom(False, len(n), n)
+    for n in store:
+        store[n] = store[n].reply().atom
+
 def proper_exit(msg, rc):
     sys.stderr.write("%s\n" % msg)
 #    try:
     release_clients()
     mouse.detach()
     keyboard.detach()
+    con.flush()
 #    except Exception, error:
 #        sys.stderr.write("%s\n" % error.__class__.__name__)
 #
@@ -1339,9 +1359,12 @@ if len(workspaces) < reply.num_crtcs:
     con.disconnect()
     sys.exit(1)
 
-_wm_atom_names = ["WM_STATE", "WM_PROTOCOLS"]
+_wm_atoms = {}
+_wm_atom_names = ["WM_STATE"]
+get_atoms(_wm_atom_names, _wm_atoms)
 
-_netwm_atom_names = ["_NET_SUPPORTED", "_NET_SUPPORTING_WM_CHECK", "_NET_WM_NAME", "_NET_WM_PID"]
+_net_wm_atoms = {}
+_net_wm_atom_names = ["_NET_SUPPORTED", "_NET_SUPPORTING_WM_CHECK", "_NET_WM_NAME", "_NET_WM_PID"]
 # "_NET_STARTUP_ID", "_NET_CLIENT_LIST", "_NET_CLIENT_LIST_STACKING", "_NET_NUMBER_OF_DESKTOPS",
 # "_NET_CURRENT_DESKTOP", "_NET_DESKTOP_NAMES", "_NET_ACTIVE_WINDOW", "_NET_DESKTOP_GEOMETRY",
 # "_NET_CLOSE_WINDOW", "_NET_WM_STRUT_PARTIAL", "_NET_WM_ICON_NAME", "_NET_WM_VISIBLE_ICON_NAME",
@@ -1354,28 +1377,22 @@ _netwm_atom_names = ["_NET_SUPPORTED", "_NET_SUPPORTING_WM_CHECK", "_NET_WM_NAME
 # "_NET_WM_STATE_MAXIMIZED_HORZ", "_NET_WM_STATE_MAXIMIZED_VERT", "_NET_WM_STATE_ABOVE",
 # "_NET_WM_STATE_BELOW", "_NET_WM_STATE_MODAL", "_NET_WM_STATE_HIDDEN", "_NET_WM_STATE_DEMANDS_ATTENTION"
 
-_wm_atoms = {}
-_netwm_atoms = {}
-for n in _wm_atom_names:
-    _wm_atoms[n] = con.core.InternAtom(False, len(n), n)
-for n in _netwm_atom_names:
-    _netwm_atoms[n] = con.core.InternAtom(False, len(n), n)
-
-for n in _wm_atoms:
-    _wm_atoms[n] = _wm_atoms[n].reply().atom
-for n in _netwm_atoms:
-    _netwm_atoms[n] = _netwm_atoms[n].reply().atom
+get_atoms(_net_wm_atom_names, _net_wm_atoms)
 
 ChangeProperty(con.core,PropMode.Replace,_viewport.root,
-               _netwm_atoms["_NET_SUPPORTED"], Atom.ATOM, 32, len(_netwm_atoms), _netwm_atoms.itervalues())
+               _net_wm_atoms["_NET_SUPPORTED"], Atom.ATOM, 32, len(_net_wm_atoms), _net_wm_atoms.itervalues())
 
 wm_win = con.generate_id()
 con.core.CreateWindow(_viewport.root_depth,wm_win,_viewport.root,-1,-1,1,1,0,WindowClass.CopyFromParent,_viewport.root_visual,0,[])
 
-ChangeProperty(con.core, PropMode.Replace, _viewport.root, _netwm_atoms["_NET_SUPPORTING_WM_CHECK"], Atom.WINDOW, 32, 1, wm_win)
-ChangeProperty(con.core, PropMode.Replace, wm_win, _netwm_atoms["_NET_SUPPORTING_WM_CHECK"], Atom.WINDOW, 32, 1, wm_win)
-ChangeProperty(con.core, PropMode.Replace, wm_win, _netwm_atoms["_NET_WM_NAME"], Atom.STRING, 8, len(wmname), wmname)
-ChangeProperty(con.core, PropMode.Replace, wm_win, _netwm_atoms["_NET_WM_PID"], Atom.CARDINAL, 32, 1, os.getpid())
+ChangeProperty(con.core, PropMode.Replace, _viewport.root, _net_wm_atoms["_NET_SUPPORTING_WM_CHECK"], Atom.WINDOW, 32, 1, wm_win)
+ChangeProperty(con.core, PropMode.Replace, wm_win, _net_wm_atoms["_NET_SUPPORTING_WM_CHECK"], Atom.WINDOW, 32, 1, wm_win)
+ChangeProperty(con.core, PropMode.Replace, wm_win, _net_wm_atoms["_NET_WM_NAME"], Atom.STRING, 8, len(wmname), wmname)
+ChangeProperty(con.core, PropMode.Replace, wm_win, _net_wm_atoms["_NET_WM_PID"], Atom.CARDINAL, 32, 1, os.getpid())
+
+_fp_wm_atoms = {}
+_fp_wm_atom_names = ["_FP_WM_WORKSPACE"]
+get_atoms(_fp_wm_atom_names, _fp_wm_atoms)
 
 for w in workspaces:
     _workspaces.append(Workspace(w, _viewport, layouts))
@@ -1397,6 +1414,12 @@ for sid in screen_ids:
     w += 1
 
 add_ext_clients(ext_clients)
+
+for w in _workspaces:
+    if w.screen is not None:
+        w.update()
+    else:
+        w.set_passive()
 
 con.core.UngrabServer()
 con.flush()
