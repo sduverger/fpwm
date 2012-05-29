@@ -130,6 +130,22 @@ def register_properties():
     fp_wm_atom_names = ["_FP_WM_WORKSPACE"]
     get_atoms(fp_wm_atom_names, runtime.fp_wm_atoms)
 
+def build_status():
+    if hasattr(config, "gap_x"):
+        cx=config.gap_x
+    else:
+        cx=0
+    if hasattr(config, "gap_height"):
+        ch=config.gap_height
+    else:
+        ch=0
+    if hasattr(config, "gap_top"):
+        ct=config.gap_top
+    else:
+        ct=True
+
+    runtime.status_line = StatusLine(config.pretty_print, Gap(x=cx, h=ch, top=ct))
+
 def setup():
     reply = runtime.xrandr.GetScreenResources(runtime.viewport.root).reply()
 
@@ -143,7 +159,7 @@ def setup():
     for w in config.workspaces:
         runtime.workspaces.append(Workspace(runtime.con, runtime.viewport, w, config.layouts))
 
-    runtime.status_line = StatusLine(config.pretty_print, Gap(h=config.gap_height, top=config.gap_top))
+    build_status()
 
     w = 0
     screen_ids = unpack_from("%dI" % reply.num_crtcs, reply.crtcs.buf())
