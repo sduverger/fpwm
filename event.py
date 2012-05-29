@@ -21,7 +21,7 @@ from   xcb.randr  import *
 
 import runtime
 from   utils   import debug, Geometry, proper_disconnect, vanilla_configure_window_request, ignored_client
-from   api     import set_current_screen_from, current_workspace
+from   api     import set_current_screen_from, current_workspace, quakeconsole_show
 from   client  import Client
 
 def event_sigterm(signum, frame):
@@ -63,24 +63,28 @@ def event_map_window(event):
     wk = current_workspace()
     cl = wk.get_client(event.window)
     if cl is None:
-        updated = False
-        if ignored_client(event.window):
-            gmx = runtime.con.core.GetGeometry(event.window).reply()
-            if gmx.border_width == 0:
-                gmx.x -= 1
-                gmx.y -= 1
-                updated = True
-            geo = Geometry(gmx.x, gmx.y, gmx.width, gmx.height, 1)
-            ignored = True
+        need_configure = False
+        ignored, cls = ignored_client(event.window)
+        if ignored:
+            if cls == "QuakeConsole":
+                runtime.quake_console = event.window
+                quakeconsole_show()
+                return
+            else:
+                gmx = runtime.con.core.GetGeometry(event.window).reply()
+                if gmx.border_width == 0:
+                    gmx.x -= 1
+                    gmx.y -= 1
+                    need_configure = True
+                geo = Geometry(gmx.x, gmx.y, gmx.width, gmx.height, 1)
         else:
             geo = None
-            ignored = False
 
         cl = Client(runtime.con, event.window, event.parent, wk, geo, ignored)
         runtime.clients[cl.id] = cl
         wk.add(cl)
 
-        if updated:
+        if need_configure:
             cl.real_configure_notify()
             cl.stack_above()
 
@@ -96,6 +100,9 @@ def event_destroy_notify(event):
             wk.untile(cl)
         wk.remove(cl)
         runtime.clients.__delitem__(cl.id)
+    elif event.window == runtime.quake_console:
+        runtime.quake_console = None
+        runtime.quake_console_toggle = False
 
 # def event_reparent_notify(event):
     # wk = current_workspace()

@@ -38,6 +38,7 @@ class KeyMap:
     right          = 114
     tab            = 23
     space          = 65
+    square         = 49
     a              = 24
     z              = 25
     e              = 26
@@ -106,16 +107,23 @@ def vanilla_configure_window_request(event):
 
     runtime.con.core.ConfigureWindow(event.window, event.value_mask, values)
 
-def ignored_client(cid):
+def get_client_classes(cid):
     r = runtime.con.core.GetProperty(False, cid, runtime.wm_atoms["WM_CLASS"], Atom.STRING, 0, 20).reply()
-    if r.value_len != 0:
-        classes = str(r.value.buf()).split('\x00')
-        if len(classes) > 1:
-            if classes[1] in runtime.ignored_windows:
-                return True
+    if r.value_len == 0:
+        return None
+    return str(r.value.buf()).split('\x00')
+
+def ignored_client(cid):
+    classes = get_client_classes(cid)
+    if classes is None:
+        return (False, "")
+
+    if len(classes) > 1:
+        if classes[1] in runtime.ignored_windows:
+            return (True, classes[1])
         if classes[0] in runtime.ignored_windows:
-            return True
-    return False
+            return (True, classes[0])
+    return (False, classes[0])
 
 def acquire_ext_clients():
     clients = []

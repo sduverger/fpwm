@@ -17,7 +17,7 @@
 #
 from layout import LayoutVTall, LayoutHTall
 from utils  import KeyMap
-from api    import next_layout, tile_client, toggle_fullscreen, toggle_show_desktop, next_workspace, prev_workspace, next_client, prev_client, send_to_next_workspace, send_to_prev_workspace, send_to_workspace, goto_workspace, increase_layout, decrease_layout, layup_client, laydown_client, move_client, resize_client, spawn
+from api    import next_layout, tile_client, toggle_fullscreen, toggle_show_desktop, next_workspace, prev_workspace, next_client, prev_client, send_to_next_workspace, send_to_prev_workspace, send_to_workspace, goto_workspace, increase_layout, decrease_layout, layup_client, laydown_client, move_client, resize_client, spawn, quakeconsole
 
 #
 # Workspace names
@@ -65,6 +65,7 @@ keyboard_bindings = [ (KeyMap.mod_alt, KeyMap.space, next_layout),
 
                       (KeyMap.mod_alt, KeyMap.s, lambda:spawn("/usr/bin/xterm","-fg","lightgreen","-bg","black")),
                       (KeyMap.mod_alt, KeyMap.r, lambda:spawn("/usr/bin/gmrun")),
+                      (KeyMap.mod_alt, KeyMap.square, lambda:quakeconsole("50x20+80+40")),
                       ]
 
 mouse_bindings = [ (KeyMap.mod_alt, 1, move_client),
@@ -94,4 +95,4 @@ passive_color = 0x505050
 #
 # These clients will not be tilled by default
 #
-ignored_windows = ["Gmrun", "MPlayer"]
+ignored_windows = ["Gmrun", "MPlayer", "QuakeConsole"]

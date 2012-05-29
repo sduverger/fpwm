@@ -16,8 +16,9 @@
 # 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.
 #
 import sys, os
-import runtime
+from   xcb.xproto import *
 from   utils import debug, get_screen_at
+import runtime
 
 def set_current_screen_at(geo):
     ns = get_screen_at(geo)
@@ -211,3 +212,23 @@ def spawn(*args):
         os._exit(0)
     os.setsid()
     os.execl(args[0], *args)
+
+def quakeconsole_show():
+    runtime.con.core.MapWindow(runtime.quake_console)
+    current_workspace().update_focus(None)
+    runtime.con.core.SetInputFocus(InputFocus.PointerRoot, runtime.quake_console, InputFocus._None)
+    runtime.quake_console_toggle = True
+
+def quakeconsole_hide():
+    runtime.con.core.UnmapWindow(runtime.quake_console)
+    runtime.quake_console_toggle = False
+
+def quakeconsole(xgeo):
+    debug("quake console\n")
+    if runtime.quake_console is None:
+        spawn("/usr/bin/xterm","-class","QuakeConsole","-geometry", xgeo)
+        runtime.quake_console_toggle = True
+    elif runtime.quake_console_toggle:
+        quakeconsole_hide()
+    else:
+        quakeconsole_show()
