@@ -52,6 +52,7 @@ def restart():
     runtime.clients.clear()
     runtime.workspaces[:] = []
     runtime.screens[:] = []
+    reload(config)
     lock()
     setup()
     unlock()
