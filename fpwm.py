@@ -23,7 +23,7 @@ import xcb
 from   xcb.xproto import *
 import xcb.randr
 
-from utils     import acquire_ext_clients, add_ext_clients, get_atoms, change_property, proper_disconnect
+from utils     import acquire_ext_clients, add_ext_clients, get_atoms, change_property, proper_disconnect, debug
 from workspace import Workspace
 from screen    import Screen
 from event     import event_sigterm, event_sigint, event_handler
@@ -110,6 +110,17 @@ for sid in screen_ids:
         gap = runtime.status_line.gap
     else:
         gap = None
+    debug("screen: x %d y %d w %d h %d\n" % (reply.x, reply.y, reply.width, reply.height))
+
+    duplicate = False
+    for s in runtime.screens:
+        if reply.x == s.x:
+            duplicate = True
+            break
+
+    if duplicate:
+        continue
+
     scr = Screen(runtime.viewport, reply.x, reply.y, reply.width, reply.height, runtime.workspaces, gap)
     runtime.focused_screen = scr
     scr.set_workspace(runtime.workspaces[w])
@@ -140,7 +151,9 @@ signal.signal(signal.SIGINT, event_sigint)
 
 while True:
     try:
-        event_handler(runtime.con.wait_for_event())
-        runtime.con.flush()
+        event = runtime.con.wait_for_event()
     except Exception, error:
         proper_disconnect("main: %s\n" % error.__class__.__name__)
+
+    event_handler(event)
+    runtime.con.flush()
