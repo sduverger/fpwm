@@ -74,45 +74,28 @@ class Client:
         self.real_configure_notify()
 
     def resize(self, up, left, dx, dy):
-        if up and left:
-            mx = dx
-            my = dy
-            dy = -dy
-            dx = -dx
-        elif up and not left:
-            mx = 0
-            my = dy
-            dy = -dy
-        elif not up and left:
-            mx = dx
+        if up:
+            my = min(dy, self.geo_virt.h - self.__min_h)
+            ry = -my
+        else:
             my = 0
-            dx = -dx
+            ry = max(dy, self.__min_h - self.geo_virt.h)
+
+        if left:
+            mx = min(dx, self.geo_virt.w - self.__min_w)
+            rx = -mx
         else:
             mx = 0
-            my = 0
+            rx = max(dx, self.__min_w - self.geo_virt.w)
 
-        if self.geo_virt.w < self.__min_w:
-            self.geo_virt.w = self.__min_w
-
-        if self.geo_virt.w == self.__min_w and dx < 0:
-            dx = 0
-            mx = 0
-
-        if self.geo_virt.h < self.__min_h:
-            self.geo_virt.h = self.__min_h
-
-        if self.geo_virt.h == self.__min_h and dy < 0:
-            dy = 0
-            my = 0
-
-        if dx == 0 and dy == 0:
+        if rx == 0 and ry == 0:
             return
 
         if mx != 0 or my != 0:
             self.move(mx, my)
 
-        self.geo_virt.w += dx
-        self.geo_virt.h += dy
+        self.geo_virt.w += rx
+        self.geo_virt.h += ry
         self.real_configure_notify()
 
     def focus(self):
