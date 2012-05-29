@@ -112,7 +112,8 @@ class Client:
 
     def reparent(self, who, wm_state):
         self.parent = who
-        self.__con.core.ReparentWindow(self.id, self.parent, self.geo_virt.x, self.geo_virt.y)
+        geo_abs = self.absolute_geometry()
+        self.__con.core.ReparentWindow(self.id, self.parent, geo_abs.x, geo_abs.y)
         change_property(PropMode.Replace, self.id, runtime.wm_atoms["WM_STATE"], Atom.CARDINAL, 32, 1, wm_state)
 
     def map(self):

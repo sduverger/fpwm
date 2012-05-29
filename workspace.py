@@ -278,8 +278,8 @@ class Workspace:
             c.reparent(who, wm_state)
 
     def set_passive(self):
-        self.screen = None
         self.reparent(self.vroot, 0)
+        self.screen = None
 
     def set_active(self, screen):
         self.screen = screen
