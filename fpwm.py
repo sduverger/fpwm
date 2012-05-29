@@ -26,7 +26,7 @@ import xcb.randr
 from utils     import acquire_ext_clients, add_ext_clients, release_clients, get_atoms, change_property, proper_disconnect, debug
 from workspace import Workspace
 from screen    import Screen
-from event     import event_sigterm, event_sigint, event_handler
+from event     import event_sigterm, event_sigint, event_sighup, event_handler
 from status    import StatusLine, Gap
 from ctrl      import Keyboard, Mouse
 from client    import Client
@@ -91,6 +91,7 @@ def register_events():
 
     signal.signal(signal.SIGTERM, event_sigterm)
     signal.signal(signal.SIGINT, event_sigint)
+    signal.signal(signal.SIGHUP, event_sighup)
 
 def register_properties():
     wm_atom_names = ["WM_STATE", "WM_CLASS"]

@@ -15,7 +15,7 @@
 # with this program; if not, write to the Free Software Foundation, Inc.,
 # 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.
 #
-import sys
+import sys, signal
 from   xcb.xproto import *
 from   xcb.randr  import *
 
@@ -31,6 +31,11 @@ def event_sigterm(signum, frame):
 def event_sigint(signum, frame):
     proper_disconnect("received SIGINT")
     sys.exit(0)
+
+def event_sighup(signum, frame):
+    signal.signal(signal.SIGHUP, event_sighup)
+    debug("received SIGHUP\n")
+    runtime.need_restart = True
 
 def event_enter_notify(event):
     debug("enter notify 0x%x: %r\n" % (event.event, event.__dict__))
