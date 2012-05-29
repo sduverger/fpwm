@@ -79,9 +79,9 @@ def event_map_window(event):
         runtime.clients[cl.id] = cl
         wk.add(cl)
 
-    if updated:
-        cl.real_configure_notify()
-        cl.stack_above()
+        if updated:
+            cl.real_configure_notify()
+            cl.stack_above()
 
     wk.map(cl)
     current_workspace().update_focus(cl)
