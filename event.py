@@ -17,6 +17,7 @@
 #
 import sys
 from   xcb.xproto import *
+from   xcb.randr  import *
 
 import runtime
 from   utils   import debug, Geometry, proper_disconnect, vanilla_configure_window_request, ignored_client
@@ -122,6 +123,10 @@ def event_button_release(event):
 def event_property_notify(event):
     debug("PropertyNotify %s: %s\n" % (runtime.con.core.GetAtomName(event.atom).reply().name.buf(), event.__dict__))
 
+def event_screen_notify(event):
+    debug("screen change notify: %s\n" % (event.__dict__))
+    runtime.need_restart = True
+
 event_handlers = { EnterNotifyEvent:event_enter_notify,
                    ConfigureRequestEvent:event_configure_window_request,
                    MapRequestEvent:event_map_window,
@@ -132,6 +137,7 @@ event_handlers = { EnterNotifyEvent:event_enter_notify,
                    ButtonPressEvent:event_button_press,
                    ButtonReleaseEvent:event_button_release,
                    PropertyNotifyEvent:event_property_notify,
+                   ScreenChangeNotifyEvent:event_screen_notify,
                    }
 
 def event_handler(event):

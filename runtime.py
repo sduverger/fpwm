@@ -16,6 +16,9 @@
 # 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.
 #
 from xcb.xproto import *
+from xcb.randr  import *
+
+wmname = "fpwm"
 
 screens = []
 workspaces = []
@@ -23,8 +26,11 @@ clients = {}
 
 focused_screen = None
 ignore_next_enter_notify = False
+need_restart = False
+
 con = None
 viewport = None
+xrandr = None
 
 wm_atoms = {}
 net_wm_atoms = {}
