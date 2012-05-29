@@ -164,9 +164,13 @@ def send_to_prev_workspace():
 
 def goto_workspace(n):
     nwk = get_workspace_at(n)
-    if nwk is not None and nwk != current_workspace() and nwk.screen is None:
-        debug("goto_workspace %s -> %s\n" % (current_workspace().name, nwk.name))
-        current_screen().set_workspace(nwk)
+    if nwk is not None and nwk != current_workspace():
+        if nwk.screen is None:
+            debug("goto_workspace %s -> %s\n" % (current_workspace().name, nwk.name))
+            current_screen().set_workspace(nwk)
+        elif nwk.focused_client is not None:
+            debug("force focus on visible workspace %s\n" % nwk.name)
+            self.focused_client.focus()
 
 def next_workspace():
     nwk = get_next_workspace_with(current_workspace())
