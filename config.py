@@ -32,44 +32,47 @@ layouts = [LayoutVTall, LayoutHTall]
 #
 # Keyboard & Mouse bindings: (modifier, key/button, function)
 #
-keyboard_bindings = [ (KeyMap.mod_alt, KeyMap.space, next_layout),
-                      (KeyMap.mod_alt, KeyMap.t,     tile_client),
-                      (KeyMap.mod_alt, KeyMap.f,     toggle_fullscreen),
-                      (KeyMap.mod_alt, KeyMap.d,     toggle_show_desktop),
+keyboard_bindings = [ (KeyMap.mod_win, KeyMap.space, next_layout),
+                      (KeyMap.mod_win, KeyMap.t,     tile_client),
+                      (KeyMap.mod_win, KeyMap.f,     toggle_fullscreen),
+                      (KeyMap.mod_win, KeyMap.d,     toggle_show_desktop),
 
-                      (KeyMap.mod_alt, KeyMap.right, next_workspace),
-                      (KeyMap.mod_alt, KeyMap.left,  prev_workspace),
+                      (KeyMap.mod_win, KeyMap.right, next_workspace),
+                      (KeyMap.mod_win, KeyMap.left,  prev_workspace),
 
-                      (KeyMap.mod_alt|KeyMap.mod_shift, KeyMap.right, lambda: (send_to_next_workspace(), next_workspace())),
-                      (KeyMap.mod_alt|KeyMap.mod_shift, KeyMap.left,  lambda: (send_to_prev_workspace(), prev_workspace())),
+                      (KeyMap.mod_win|KeyMap.mod_shift, KeyMap.right, lambda: (send_to_next_workspace(), next_workspace())),
+                      (KeyMap.mod_win|KeyMap.mod_shift, KeyMap.left,  lambda: (send_to_prev_workspace(), prev_workspace())),
 
-                      (KeyMap.mod_alt, KeyMap.tab,   next_client),
-                      (KeyMap.mod_alt, KeyMap.down,  next_client),
-                      (KeyMap.mod_alt, KeyMap.up,    prev_client),
+                      (KeyMap.mod_win, KeyMap.tab,   next_client),
+                      (KeyMap.mod_win, KeyMap.down,  next_client),
+                      (KeyMap.mod_win, KeyMap.up,    prev_client),
 
-                      (KeyMap.mod_alt|KeyMap.mod_shift, KeyMap.up, layup_client),
-                      (KeyMap.mod_alt|KeyMap.mod_shift, KeyMap.down, laydown_client),
+                      (KeyMap.mod_win|KeyMap.mod_shift, KeyMap.up, layup_client),
+                      (KeyMap.mod_win|KeyMap.mod_shift, KeyMap.down, laydown_client),
 
-                      (KeyMap.mod_alt, KeyMap.n1, lambda: goto_workspace(0)),
-                      (KeyMap.mod_alt, KeyMap.n2, lambda: goto_workspace(1)),
-                      (KeyMap.mod_alt, KeyMap.n3, lambda: goto_workspace(2)),
-                      (KeyMap.mod_alt, KeyMap.n4, lambda: goto_workspace(3)),
+                      (KeyMap.mod_win, KeyMap.n1, lambda: goto_workspace(0)),
+                      (KeyMap.mod_win, KeyMap.n2, lambda: goto_workspace(1)),
+                      (KeyMap.mod_win, KeyMap.n3, lambda: goto_workspace(2)),
+                      (KeyMap.mod_win, KeyMap.n4, lambda: goto_workspace(3)),
 
-                      (KeyMap.mod_alt|KeyMap.mod_shift, KeyMap.n1, lambda: (send_to_workspace(0),goto_workspace(0))),
-                      (KeyMap.mod_alt|KeyMap.mod_shift, KeyMap.n2, lambda: (send_to_workspace(1),goto_workspace(1))),
-                      (KeyMap.mod_alt|KeyMap.mod_shift, KeyMap.n3, lambda: (send_to_workspace(2),goto_workspace(2))),
-                      (KeyMap.mod_alt|KeyMap.mod_shift, KeyMap.n4, lambda: (send_to_workspace(3),goto_workspace(3))),
+                      (KeyMap.mod_win|KeyMap.mod_shift, KeyMap.n1, lambda: (send_to_workspace(0),goto_workspace(0))),
+                      (KeyMap.mod_win|KeyMap.mod_shift, KeyMap.n2, lambda: (send_to_workspace(1),goto_workspace(1))),
+                      (KeyMap.mod_win|KeyMap.mod_shift, KeyMap.n3, lambda: (send_to_workspace(2),goto_workspace(2))),
+                      (KeyMap.mod_win|KeyMap.mod_shift, KeyMap.n4, lambda: (send_to_workspace(3),goto_workspace(3))),
 
-                      (KeyMap.mod_alt, KeyMap.l, lambda: increase_layout(0.05)),
-                      (KeyMap.mod_alt, KeyMap.h, lambda: decrease_layout(0.05)),
+                      (KeyMap.mod_win, KeyMap.l, lambda: increase_layout(0.05)),
+                      (KeyMap.mod_win, KeyMap.h, lambda: decrease_layout(0.05)),
 
-                      (KeyMap.mod_alt, KeyMap.s, lambda:spawn("/usr/bin/xterm","-fg","lightgreen","-bg","black")),
-                      (KeyMap.mod_alt, KeyMap.r, lambda:spawn("/usr/bin/gmrun")),
-                      (KeyMap.mod_alt, KeyMap.square, lambda:quakeconsole("50x20+80+40")),
+                      (KeyMap.mod_win, KeyMap.s, lambda:spawn("/usr/bin/xterm")),
+                      (KeyMap.mod_win, KeyMap.e, lambda:spawn("/usr/bin/emacs")),
+                      (KeyMap.mod_win, KeyMap.r, lambda:spawn("/usr/bin/gmrun")),
+                      (KeyMap.mod_win, KeyMap.m, lambda:spawn("/usr/bin/www-browser")),
+                      (KeyMap.mod_win, KeyMap.pause, lambda:spawn("/usr/bin/xscreensaver-command", "-lock")),
+                      (KeyMap.mod_win, KeyMap.square, lambda:quakeconsole(450,400,1024,480)),
                       ]
 
-mouse_bindings = [ (KeyMap.mod_alt, 1, move_client),
-                   (KeyMap.mod_alt, 3, resize_client),
+mouse_bindings = [ (KeyMap.mod_win, 1, move_client),
+                   (KeyMap.mod_win, 3, resize_client),
                    ]
 
 #
@@ -85,6 +88,7 @@ def pretty_print(aw, vw, hw):
 #
 gap_height = 18
 gap_top = True
+gap_x = 1920
 
 #
 # Focused/Unfocused client colors
