@@ -1,6 +1,8 @@
-- extends _NET_WM support (_NET_VIRTUAL_ROOTS, _NET_WM_HINTS, ...)
-- manage FocusIn/FocusOut events
-- add/remove workspaces
-- tasks (aka workspace lists)
-- 2d workspaces (next/prev/up/down)
-- 2d pager
+. extends _NET_WM support (_NET_VIRTUAL_ROOTS, _NET_WM_HINTS, ...)
+. manage FocusIn/FocusOut events
+. add/remove workspaces
+. tasks (aka workspace lists)
+. 2d workspaces (next/prev/up/down)
+. 2d pager
+. change reparent strategy
+. rewritte everything
