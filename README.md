@@ -1,12 +1,12 @@
-fpwm
+FPWM
 ====
 
-A python tiling window manager.
+A fucking python tiling window manager.
 
 What is it ?
 ------------
 
-fpwm is a tiling window manager written in python so you can configure it using python and have full access to its internals. It's a little bit what xmonad offers, without the purely functional approach of Haskell.
+Fpwm is a tiling window manager written in python. One can configure it and access its internals using python. It's a little bit what xmonad offers, without the purely functional approach of Haskell.
 
 What fpwm offers ?
 ------------------
@@ -26,6 +26,7 @@ What fpwm offers ?
 * toggle fullscreen/show desktop
 * spawn external programs
 * ignored clients
+* quake console
 
 Why another tiling window manager ?
 -----------------------------------
@@ -39,7 +40,7 @@ Why another tiling window manager ?
 Limitations ?
 -------------
 
-* you will cry blood it you're a good python programmer
+* you will cry blood if you're a good python programmer
 * there are bugs, they will be fixed
 * check TODO and BUGS files
 
@@ -50,4 +51,4 @@ How to use it ?
 * clone it `git clone git@github.com:sduverger/fpwm.git`
 * ninja it `mv fpwm .fpwm`
 * edit `config.py`
-* run it `./fpwm | dzen2 -w <screen_width>`
+* run it `~/.fpwm/fpwm.py | dzen2 -w <screen_width> -x <screen_offset>`
