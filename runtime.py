@@ -48,3 +48,5 @@ mouse = None
 ignored_windows = []
 quake_console = None
 quake_console_toggle = False
+
+pointer_follow = False

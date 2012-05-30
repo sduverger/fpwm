@@ -145,6 +145,7 @@ def build_status():
 
 def setup():
     runtime.ignored_windows = config.ignored_windows
+    runtime.pointer_follow = config.pointer_follow
 
     reply = runtime.xrandr.GetScreenResources(runtime.viewport.root).reply()
 

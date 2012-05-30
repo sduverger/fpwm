@@ -18,6 +18,7 @@
 from layout import LayoutVTall, LayoutHTall
 from utils  import KeyMap
 from api    import next_layout, tile_client, toggle_fullscreen, toggle_show_desktop, next_workspace, prev_workspace, next_client, prev_client, send_to_next_workspace, send_to_prev_workspace, send_to_workspace, goto_workspace, increase_layout, decrease_layout, layup_client, laydown_client, move_client, resize_client, spawn, quakeconsole
+import runtime
 
 #
 # Workspace names
@@ -100,3 +101,8 @@ passive_color = 0x505050
 # These clients will not be tilled by default
 #
 ignored_windows = ["Gmrun", "MPlayer", "QuakeConsole"]
+
+#
+# Force pointer to follow focused client
+#
+pointer_follow = True

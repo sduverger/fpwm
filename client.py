@@ -17,7 +17,7 @@
 #
 from xcb.xproto import *
 
-from   utils import Geometry, change_property, debug, configure_window, map_window, stack_window
+from   utils import Geometry, change_property, debug, configure_window, map_window, stack_window, set_input_focus
 import config
 import runtime
 
@@ -102,7 +102,7 @@ class Client:
     def focus(self):
         self.border_color = config.focused_color
         self.update_border_color()
-        self.__con.core.SetInputFocus(InputFocus.PointerRoot, self.id, InputFocus._None)
+        set_input_focus(self.id)
 
     def unfocus(self):
         self.border_color = config.passive_color

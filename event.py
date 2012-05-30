@@ -21,7 +21,7 @@ from   xcb.randr  import *
 
 import runtime
 from   utils   import debug, Geometry, proper_disconnect, vanilla_configure_window_request, ignored_client
-from   api     import set_current_screen_from, current_workspace, quakeconsole_show
+from   api     import set_current_screen_from, current_workspace, quakeconsole_show, warp_pointer
 from   client  import Client
 
 def event_sigterm(signum, frame):
@@ -95,6 +95,8 @@ def event_map_window(event):
 
     wk.map(cl)
     current_workspace().update_focus(cl)
+    if runtime.pointer_follow:
+        warp_pointer(cl)
 
 def event_destroy_notify(event):
     wk = current_workspace()

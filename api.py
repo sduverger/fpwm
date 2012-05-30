@@ -17,7 +17,7 @@
 #
 import sys, os
 from   xcb.xproto import *
-from   utils import debug, get_screen_at, Geometry, configure_window, stack_window
+from   utils import debug, get_screen_at, Geometry, configure_window, stack_window, set_input_focus
 import runtime
 
 def set_current_screen_at(geo):
@@ -187,11 +187,19 @@ def prev_workspace():
         debug("prev_workspace %s -> %s\n" % (current_workspace().name, nwk.name))
         current_screen().set_workspace(nwk)
 
+def warp_pointer(c):
+    if c is not None:
+        runtime.con.core.WarpPointer(0, c.id, 0,0,0,0, c.geo_virt.w - 10, 10)
+
 def next_client():
     current_workspace().next_client()
+    if runtime.pointer_follow:
+        warp_pointer(current_client())
 
 def prev_client():
     current_workspace().prev_client()
+    if runtime.pointer_follow:
+        warp_pointer(current_client())
 
 def layup_client():
     current_workspace().layup_client()
@@ -227,7 +235,7 @@ def quakeconsole_show():
     stack_window(runtime.quake_console, StackMode.Above)
     runtime.con.core.MapWindow(runtime.quake_console)
     current_workspace().update_focus(None)
-    runtime.con.core.SetInputFocus(InputFocus.PointerRoot, runtime.quake_console, InputFocus._None)
+    set_input_focus(runtime.quake_console)
     runtime.quake_console_toggle = True
 
 def quakeconsole_hide():
