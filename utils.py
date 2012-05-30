@@ -109,12 +109,12 @@ def vanilla_configure_window_request(event):
 def get_client_classes(cid):
     r = runtime.con.core.GetProperty(False, cid, runtime.wm_atoms["WM_CLASS"], Atom.STRING, 0, 20).reply()
     if r.value_len == 0:
-        return None
+        return []
     return str(r.value.buf()).split('\x00')
 
 def ignored_client(cid):
     classes = get_client_classes(cid)
-    if classes is None:
+    if len(classes) == 0:
         return (False, "")
 
     if len(classes) > 1:
@@ -132,10 +132,19 @@ def acquire_ext_clients():
         return clients
     children = unpack_from("%dI" % reply.children_len, reply.children.buf())
     for cid in children:
+        cls = get_client_classes(cid)
+        if len(cls) > 1 and cls[1] == "QuakeConsole":
+            runtime.quake_console = cid
+            geo = runtime.con.core.GetGeometry(cid).reply()
+            runtime.quake_console_geometry = Geometry(geo.x, geo.y, geo.width, geo.height)
+            continue
+
         wa = runtime.con.core.GetWindowAttributes(cid).reply()
         if wa.map_state == MapState.Unmapped or wa.override_redirect:
             continue
+
         clients.append(cid)
+
     return clients
 
 def get_screen_at(geo):
@@ -146,7 +155,7 @@ def get_screen_at(geo):
 def add_ext_clients(ext_clients, client_builder):
     for cid in ext_clients:
         geo = runtime.con.core.GetGeometry(cid).reply()
-        gm = Geometry(geo.x, geo.y, geo.width, geo.height, 1)
+        gm = Geometry(geo.x, geo.y, geo.width, geo.height)
         debug("ext client at x %d y %d w %d h %d b %d\n" % (gm.x, gm.y, gm.w, gm.h, gm.b))
 
         r = runtime.con.core.GetProperty(False, cid, runtime.fp_wm_atoms["_FP_WM_WORKSPACE"], Atom.STRING, 0, 10).reply()
@@ -178,6 +187,11 @@ def release_clients():
         runtime.con.core.ReparentWindow(c.id, runtime.viewport.root, c.geo_virt.x, c.geo_virt.y)
         c.send_config_window(c.geo_virt)
 
+    if runtime.quake_console is not None:
+        runtime.con.core.ReparentWindow(runtime.quake_console, runtime.viewport.root,
+                                        runtime.quake_console_geometry.x, runtime.quake_console_geometry.y)
+        configure_window(runtime.quake_console, runtime.quake_console_geometry)
+
 def flat(format, data):
     f={32:'I',16:'H',8:'B'}[format]
     if not hasattr(data, "__iter__") and not hasattr(data, "__getitem__"):
@@ -186,6 +200,9 @@ def flat(format, data):
 
 def change_property(mode, window, property, type, format, data_len, data):
     runtime.con.core.ChangeProperty(mode, window, property, type, format, data_len, flat(format, data))
+
+def stack_window(wid, mode):
+    runtime.con.core.ConfigureWindow(wid, ConfigWindow.StackMode, [mode])
 
 def configure_window(wid, geo):
     debug("configure 0x%x: x %d y %d w %d h %d\n" % (wid, geo.x, geo.y, geo.w, geo.h))

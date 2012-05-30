@@ -17,7 +17,7 @@
 #
 from xcb.xproto import *
 
-from   utils import Geometry, change_property, debug, configure_window, map_window
+from   utils import Geometry, change_property, debug, configure_window, map_window, stack_window
 import config
 import runtime
 
@@ -133,7 +133,7 @@ class Client:
             self.tiled = False
 
     def __stack(self, how):
-        self.__con.core.ConfigureWindow(self.id, ConfigWindow.StackMode, [how])
+        stack_window(self.id, how)
 
     def stack_above(self):
         self.__stack(StackMode.Above)

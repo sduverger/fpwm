@@ -17,7 +17,7 @@
 #
 import sys, os
 from   xcb.xproto import *
-from   utils import debug, get_screen_at, Geometry, configure_window
+from   utils import debug, get_screen_at, Geometry, configure_window, stack_window
 import runtime
 
 def set_current_screen_at(geo):
@@ -224,6 +224,7 @@ def quakeconsole_show():
     geo = runtime.quake_console_geometry.copy()
     geo.x += current_screen().x
     configure_window(runtime.quake_console, geo)
+    stack_window(runtime.quake_console, StackMode.Above)
     runtime.con.core.MapWindow(runtime.quake_console)
     current_workspace().update_focus(None)
     runtime.con.core.SetInputFocus(InputFocus.PointerRoot, runtime.quake_console, InputFocus._None)
