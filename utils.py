@@ -83,10 +83,8 @@ class KeyMap:
     mod_win        = KeyButMask.Mod4
     mod_altgr      = KeyButMask.Mod5
 
-do_debug = True
-
 def debug(msg):
-    if do_debug:
+    if runtime.debug:
         sys.stderr.write(msg)
 
 def vanilla_configure_window_request(event):

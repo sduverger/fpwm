@@ -19,6 +19,7 @@ from xcb.xproto import *
 from xcb.randr  import *
 
 wmname = "fpwm"
+debug = True
 
 screens = []
 workspaces = []
