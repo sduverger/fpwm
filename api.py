@@ -17,7 +17,7 @@
 #
 import sys, os
 from   xcb.xproto import *
-from   utils import debug, get_screen_at
+from   utils import debug, get_screen_at, Geometry, configure_window
 import runtime
 
 def set_current_screen_at(geo):
@@ -164,13 +164,16 @@ def send_to_prev_workspace():
 
 def goto_workspace(n):
     nwk = get_workspace_at(n)
-    if nwk is not None and nwk != current_workspace():
+    if nwk is not None:
         if nwk.screen is None:
-            debug("goto_workspace %s -> %s\n" % (current_workspace().name, nwk.name))
-            current_screen().set_workspace(nwk)
-        elif nwk.focused_client is not None:
-            debug("force focus on visible workspace %s\n" % nwk.name)
-            self.focused_client.focus()
+            if nwk != current_workspace():
+                debug("goto_workspace %s -> %s\n" % (current_workspace().name, nwk.name))
+                current_screen().set_workspace(nwk)
+        else:
+            set_current_screen_from(nwk.screen)
+            if nwk.focused_client is not None:
+                debug("force focus on visible workspace %s\n" % nwk.name)
+                nwk.focused_client.focus()
 
 def next_workspace():
     nwk = get_next_workspace_with(current_workspace())
@@ -218,6 +221,9 @@ def spawn(*args):
     os.execl(args[0], *args)
 
 def quakeconsole_show():
+    geo = runtime.quake_console_geometry.copy()
+    geo.x += current_screen().x
+    configure_window(runtime.quake_console, geo)
     runtime.con.core.MapWindow(runtime.quake_console)
     current_workspace().update_focus(None)
     runtime.con.core.SetInputFocus(InputFocus.PointerRoot, runtime.quake_console, InputFocus._None)
@@ -227,10 +233,11 @@ def quakeconsole_hide():
     runtime.con.core.UnmapWindow(runtime.quake_console)
     runtime.quake_console_toggle = False
 
-def quakeconsole(xgeo):
+def quakeconsole(x,y,w,h):
     debug("quake console\n")
     if runtime.quake_console is None:
-        spawn("/usr/bin/xterm","-class","QuakeConsole","-geometry", xgeo)
+        spawn("/usr/bin/xterm","-class","QuakeConsole")
+        runtime.quake_console_geometry = Geometry(x,y,w,h)
         runtime.quake_console_toggle = True
     elif runtime.quake_console_toggle:
         quakeconsole_hide()

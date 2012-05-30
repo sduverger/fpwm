@@ -17,7 +17,7 @@
 #
 from xcb.xproto import *
 
-from   utils import Geometry, change_property, debug
+from   utils import Geometry, change_property, debug, configure_window, map_window
 import config
 import runtime
 
@@ -59,7 +59,8 @@ class Client:
         return self.geo_virt.copy()
 
     def absolute_geometry(self):
-        return Geometry(self.geo_virt.x+self.workspace.screen.x, self.geo_virt.y+self.workspace.screen.y)
+        return Geometry(self.geo_virt.x+self.workspace.screen.x, self.geo_virt.y+self.workspace.screen.y,
+                        self.geo_virt.w, self.geo_virt.h, self.geo_virt.b)
 
     def located_into(self, workspace):
         geo_abs = self.absolute_geometry()
@@ -117,8 +118,7 @@ class Client:
         change_property(PropMode.Replace, self.id, runtime.wm_atoms["WM_STATE"], Atom.CARDINAL, 32, 1, wm_state)
 
     def map(self):
-        change_property(PropMode.Replace, self.id, runtime.wm_atoms["WM_STATE"], Atom.CARDINAL, 32, 1, 1)
-        self.__con.core.MapWindow(self.id)
+        map_window(self.id, 1)
 
     def tile(self):
         if self.never_tiled:
@@ -175,11 +175,8 @@ class Client:
 
         self.__set_workspace(workspace)
 
-    def send_config_window(self, x, y, w, h, b):
-        debug("r_configure 0x%x: x %d y %d w %d h %d\n" % (self.id, x, y, w, h))
-        mask = ConfigWindow.X|ConfigWindow.Y|ConfigWindow.Width|ConfigWindow.Height|ConfigWindow.BorderWidth
-        pkt = pack('=xx2xIH2xiiIII', self.id, mask, x, y, w, h, b)
-        self.__con.core.send_request(xcb.Request(pkt, 12, True, False), xcb.VoidCookie())
+    def send_config_window(self, geo):
+        configure_window(self.id, geo)
 
     def real_configure_notify(self):
         geo_abs = self.absolute_geometry()
@@ -187,7 +184,7 @@ class Client:
             if self.workspace.screen.gap.top:
                 geo_abs.y -= self.workspace.screen.gap.h
 
-        self.send_config_window(geo_abs.x, geo_abs.y, self.geo_virt.w, self.geo_virt.h, self.geo_virt.b)
+        self.send_config_window(geo_abs)
 
     def synthetic_configure_notify(self):
         debug("s_configure: x %d y %d w %d h %d\n" % (self.geo_want.x, self.geo_want.y, self.geo_want.w, self.geo_want.h))

@@ -21,7 +21,7 @@ from   xcb.xproto import *
 import runtime
 
 class Geometry:
-    def __init__(self, x=0, y=0, w=0, h=0, b=0):
+    def __init__(self, x=0, y=0, w=0, h=0, b=1):
         self.x = x
         self.y = y
         self.w = w
@@ -36,6 +36,7 @@ class KeyMap:
     down           = 116
     left           = 113
     right          = 114
+    pause          = 127
     tab            = 23
     space          = 65
     square         = 49
@@ -177,7 +178,7 @@ def add_ext_clients(ext_clients, client_builder):
 def release_clients():
     for c in runtime.clients.itervalues():
         runtime.con.core.ReparentWindow(c.id, runtime.viewport.root, c.geo_virt.x, c.geo_virt.y)
-        c.send_config_window(c.geo_virt.x, c.geo_virt.y, c.geo_virt.w, c.geo_virt.h, c.geo_virt.b)
+        c.send_config_window(c.geo_virt)
 
 def flat(format, data):
     f={32:'I',16:'H',8:'B'}[format]
@@ -187,6 +188,16 @@ def flat(format, data):
 
 def change_property(mode, window, property, type, format, data_len, data):
     runtime.con.core.ChangeProperty(mode, window, property, type, format, data_len, flat(format, data))
+
+def configure_window(wid, geo):
+    debug("configure 0x%x: x %d y %d w %d h %d\n" % (wid, geo.x, geo.y, geo.w, geo.h))
+    mask = ConfigWindow.X|ConfigWindow.Y|ConfigWindow.Width|ConfigWindow.Height|ConfigWindow.BorderWidth
+    pkt = pack('=xx2xIH2xiiIII', wid, mask, geo.x, geo.y, geo.w, geo.h, geo.b)
+    runtime.con.core.send_request(xcb.Request(pkt, 12, True, False), xcb.VoidCookie())
+
+def map_window(wid, state):
+    change_property(PropMode.Replace, wid, runtime.wm_atoms["WM_STATE"], Atom.CARDINAL, 32, 1, state)
+    runtime.con.core.MapWindow(wid)
 
 def get_atoms(names, store):
     for n in names:
