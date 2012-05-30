@@ -21,7 +21,7 @@ from   xcb.randr  import *
 
 import runtime
 from   utils   import debug, Geometry, proper_disconnect, vanilla_configure_window_request, ignored_client
-from   api     import set_current_screen_from, current_workspace, quakeconsole_show, warp_pointer
+from   api     import set_current_screen_from, current_workspace, quakeconsole_show
 from   client  import Client
 
 def event_sigterm(signum, frame):
@@ -53,7 +53,7 @@ def event_enter_notify(event):
         debug("no screen for client 0x%x on workspace %s\n" % (cl.id, cl.workspace.name))
         return
 
-    current_workspace().update_focus(cl)
+    current_workspace().update_focus(cl, True)
 
 def event_configure_window_request(event):
     wk = current_workspace()
@@ -95,8 +95,6 @@ def event_map_window(event):
 
     wk.map(cl)
     current_workspace().update_focus(cl)
-    if runtime.pointer_follow:
-        warp_pointer(cl)
 
 def event_destroy_notify(event):
     wk = current_workspace()

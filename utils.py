@@ -201,8 +201,10 @@ def flat(format, data):
 def change_property(mode, window, property, type, format, data_len, data):
     runtime.con.core.ChangeProperty(mode, window, property, type, format, data_len, flat(format, data))
 
-def set_input_focus(wid):
+def set_input_focus(wid, geo, ignore_follow=False):
     runtime.con.core.SetInputFocus(InputFocus.PointerRoot, wid, InputFocus._None)
+    if not ignore_follow and runtime.pointer_follow:
+        runtime.con.core.WarpPointer(0, wid, 0,0,0,0, geo.w - 10, 10)
 
 def stack_window(wid, mode):
     runtime.con.core.ConfigureWindow(wid, ConfigWindow.StackMode, [mode])

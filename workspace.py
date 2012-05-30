@@ -264,14 +264,14 @@ class Workspace:
         self.focused_client.focus()
         self.update()
 
-    def update_focus(self, client):
+    def update_focus(self, client, ignore_follow=False):
         if self.focused_client is not None:
             self.focused_client.unfocus()
 
         self.focused_client = client
 
         if client is not None:
-            self.focused_client.focus()
+            self.focused_client.focus(ignore_follow)
 
     def reparent(self, who, wm_state):
         for c in self.__clients.itervalues():

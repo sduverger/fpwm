@@ -99,10 +99,10 @@ class Client:
         self.geo_virt.h += ry
         self.real_configure_notify()
 
-    def focus(self):
+    def focus(self, ignore_follow=False):
         self.border_color = config.focused_color
         self.update_border_color()
-        set_input_focus(self.id)
+        set_input_focus(self.id, self.geo_virt, ignore_follow)
 
     def unfocus(self):
         self.border_color = config.passive_color
