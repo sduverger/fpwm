@@ -35,8 +35,6 @@ import runtime
 import config
 
 def startup():
-    runtime.ignored_windows = config.ignored_windows
-
     connect()
     lock()
 
@@ -64,10 +62,7 @@ def connect():
     runtime.xrandr = runtime.con(xcb.randr.key)
 
     runtime.keyboard = Keyboard(runtime.con)
-    runtime.keyboard.attach(config.keyboard_bindings, runtime.viewport.root)
-
     runtime.mouse = Mouse(runtime.con)
-    runtime.mouse.attach(config.mouse_bindings, runtime.viewport.root)
 
 def lock():
     runtime.con.core.GrabServer()
@@ -149,6 +144,8 @@ def build_status():
     runtime.status_line = StatusLine(config.pretty_print, Gap(x=cx, h=ch, top=ct))
 
 def setup():
+    runtime.ignored_windows = config.ignored_windows
+
     reply = runtime.xrandr.GetScreenResources(runtime.viewport.root).reply()
 
     if len(config.workspaces) < reply.num_crtcs:
@@ -197,6 +194,9 @@ def setup():
             w.update()
         else:
             w.set_passive()
+
+    runtime.keyboard.attach(config.keyboard_bindings, runtime.viewport.root)
+    runtime.mouse.attach(config.mouse_bindings, runtime.viewport.root)
 
 def run():
     while True:
