@@ -18,7 +18,6 @@
 from xcb.xproto import *
 
 from   utils import Geometry, change_property, debug, configure_window, map_window, stack_window, set_input_focus
-import config
 import runtime
 
 class Client:
@@ -36,7 +35,7 @@ class Client:
             self.geo_want = geometry.copy()
 
         self.geo_unmax = None
-        self.border_color = config.passive_color
+        self.border_color = runtime.passive_color
         self.tiled = False
         if ignored:
             self.never_tiled = False
@@ -100,12 +99,12 @@ class Client:
         self.real_configure_notify()
 
     def focus(self, ignore_follow=False):
-        self.border_color = config.focused_color
+        self.border_color = runtime.focused_color
         self.update_border_color()
         set_input_focus(self.id, self.geo_virt, ignore_follow)
 
     def unfocus(self):
-        self.border_color = config.passive_color
+        self.border_color = runtime.passive_color
         self.update_border_color()
 
     def update_border_color(self):

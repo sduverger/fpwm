@@ -148,6 +148,9 @@ def build_status():
     runtime.status_line = StatusLine(config.pretty_print, Gap(x=cx, h=ch, top=ct))
 
 def setup():
+    runtime.focused_color = config.focused_color
+    runtime.passive_color = config.passive_color
+
     runtime.ignored_windows = config.ignored_windows
     runtime.pointer_follow = config.pointer_follow
 
