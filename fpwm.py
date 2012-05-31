@@ -47,9 +47,13 @@ def startup():
 
 def restart():
     release_clients()
+    runtime.mouse.detach()
+    runtime.keyboard.detach()
+
     runtime.clients.clear()
     runtime.workspaces[:] = []
     runtime.screens[:] = []
+
     reload(config)
     lock()
     setup()
@@ -147,6 +151,9 @@ def setup():
     runtime.ignored_windows = config.ignored_windows
     runtime.pointer_follow = config.pointer_follow
 
+    runtime.keyboard.bind(config.keyboard_bindings)
+    runtime.mouse.bind(config.mouse_bindings)
+
     reply = runtime.xrandr.GetScreenResources(runtime.viewport.root).reply()
 
     if len(config.workspaces) < reply.num_crtcs:
@@ -196,8 +203,8 @@ def setup():
         else:
             w.set_passive()
 
-    runtime.keyboard.attach(config.keyboard_bindings, runtime.viewport.root)
-    runtime.mouse.attach(config.mouse_bindings, runtime.viewport.root)
+    runtime.keyboard.attach(runtime.viewport.root)
+    runtime.mouse.attach(runtime.viewport.root)
 
 def run():
     while True:
