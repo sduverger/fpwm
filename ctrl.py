@@ -36,9 +36,6 @@ class Controller:
 
             self._bindings[k][m] = f
 
-    def detach(self):
-        self._con.core.UngrabKey(False, self._wid, ModMask.Any)
-
 class Keyboard(Controller):
     def __init__(self, con):
         Controller.__init__(self, con)
@@ -49,6 +46,9 @@ class Keyboard(Controller):
         for k in self._bindings:
             for m in self._bindings[k]:
                 self._con.core.GrabKey(False, self._wid, m, k, GrabMode.Async, GrabMode.Async)
+
+    def detach(self):
+        self._con.core.UngrabKey(False, self._wid, ModMask.Any)
 
     def press(self, event):
         debug("key press 0x%x: %r\n" % (event.child, event.__dict__))
@@ -75,6 +75,9 @@ class Mouse(Controller):
                 bmask = eval("EventMask.Button%dMotion" % b)
                 emask = EventMask.ButtonPress|EventMask.ButtonRelease|bmask
                 self._con.core.GrabButton(False, self._wid, emask, GrabMode.Async, GrabMode.Async, 0, 0, b, m)
+
+    def detach(self):
+        self._con.core.UngrabButton(False, self._wid, ButtonMask.Any)
 
     def motion(self, event):
         if self._acting is None:
